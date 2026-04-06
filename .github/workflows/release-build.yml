@@ -1,0 +1,40 @@
+name: Build Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure Git info (required for Paper patcher)
+        run: |
+          git config --global user.email "ci@sugarcane.internal"
+          git config --global user.name "Sugarcane CI"
+
+      - name: Build Paperclip Jar
+        run: |
+          ./gradlew applyPatches
+          ./gradlew createMojmapPaperclipJar
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/libs/*-mojmap.jar
+          token: ${{ secrets.GITHUB_TOKEN }}

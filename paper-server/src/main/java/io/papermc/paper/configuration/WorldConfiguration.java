@@ -175,7 +175,7 @@ public class WorldConfiguration extends ConfigurationPart {
             public boolean filterBadTileEntityNbtFromFallingBlocks = true;
             public List<NbtPathArgument.NbtPath> filteredEntityTagNbtPaths = NbtPathSerializer.fromString(List.of("Pos", "Motion", "sleeping_pos"));
             public boolean disableMobSpawnerSpawnEggTransformation = false;
-            public boolean perPlayerMobSpawns = true;
+            public boolean perPlayerMobSpawns = false;
             public boolean scanForLegacyEnderDragon = true;
             @MergeMap
             public Reference2IntMap<MobCategory> spawnLimits = Util.make(new Reference2IntOpenHashMap<>(NaturalSpawner.SPAWNING_CATEGORIES.length), map -> Arrays.stream(NaturalSpawner.SPAWNING_CATEGORIES).forEach(mobCategory -> map.put(mobCategory, -1)));
@@ -505,7 +505,7 @@ public class WorldConfiguration extends ConfigurationPart {
         public int maxAutoSaveChunksPerTick = 24;
         public int fixedChunkInhabitedTime = -1;
         public boolean preventMovingIntoUnloadedChunks = false;
-        public Duration delayChunkUnloadsBy = Duration.of("10s");
+        public Duration delayChunkUnloadsBy = Duration.of("0s");
         public Reference2IntMap<EntityType<?>> entityPerChunkSaveLimit = Util.make(new Reference2IntOpenHashMap<>(BuiltInRegistries.ENTITY_TYPE.size()), map -> {
             map.defaultReturnValue(-1);
             map.put(EntityType.EXPERIENCE_ORB, -1);
