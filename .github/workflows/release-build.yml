@@ -32,9 +32,10 @@ jobs:
         run: |
           ./gradlew applyPatches
           ./gradlew createMojmapPaperclipJar
+          mv build/libs/*-mojmap.jar build/libs/Sugarcane-1.21.11-${{ github.run_number }}.jar
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/libs/*-mojmap.jar
+          files: build/libs/Sugarcane-*.jar
           token: ${{ secrets.GITHUB_TOKEN }}
