@@ -48,7 +48,7 @@ public class GlobalConfiguration extends ConfigurationPart {
             "Note that this setting also affects chunk generations, since a chunk load is always first issued to test if a" +
             "chunk is already generated. Set to -1 to disable this limit."
         )
-        public double playerMaxChunkLoadRate = 100.0;
+        public double playerMaxChunkLoadRate = -1.0;
 
         @Comment("The maximum rate at which chunks will generate for any individual player. Set to -1 to disable this limit.")
         public double playerMaxChunkGenerateRate = -1.0;
@@ -163,7 +163,7 @@ public class GlobalConfiguration extends ConfigurationPart {
         public int tabSpamIncrement = 1;
         public int tabSpamLimit = 500;
         public int recipeSpamIncrement = 1;
-        public int recipeSpamLimit = 20;
+        public int recipeSpamLimit = 1000;
         public IntOr.Disabled incomingPacketThreshold = new IntOr.Disabled(OptionalInt.of(300));
     }
 
@@ -175,12 +175,12 @@ public class GlobalConfiguration extends ConfigurationPart {
         @Comment("This setting controls the ability to enable dupes related to tripwires.")
         public boolean skipTripwireHookPlacementValidation = false;
         @Comment("This setting controls if players should be able to break bedrock, end portals and other intended to be permanent blocks.")
-        public boolean allowPermanentBlockBreakExploits = false;
+        public boolean allowPermanentBlockBreakExploits = true;
         @Comment("This setting controls if player should be able to use TNT duplication, but this also allows duplicating carpet, rails and potentially other items")
-        public boolean allowPistonDuplication = false;
+        public boolean allowPistonDuplication = true;
         public boolean performUsernameValidation = true;
         @Comment("This setting controls if players should be able to create headless pistons.")
-        public boolean allowHeadlessPistons = false;
+        public boolean allowHeadlessPistons = true;
         @Comment("This setting controls if the vanilla damage tick should be skipped if damage was blocked via a shield.")
         public boolean skipVanillaDamageTickWhenShieldBlocked = false;
         @Comment("This setting controls what compression format is used for region files.")
@@ -261,7 +261,7 @@ public class GlobalConfiguration extends ConfigurationPart {
     public class PacketLimiter extends ConfigurationPart {
         public Component kickMessage = Component.translatable("disconnect.exceeded_packet_rate", NamedTextColor.RED);
         public PacketLimit allPackets = new PacketLimit(7.0, 500.0, PacketLimit.ViolateAction.KICK);
-        public Map<@WriteKeyBack Class<? extends Packet<?>>, PacketLimit> overrides = Map.of(ServerboundPlaceRecipePacket.class, new PacketLimit(4.0, 5.0, PacketLimit.ViolateAction.DROP));
+        public Map<@WriteKeyBack Class<? extends Packet<?>>, PacketLimit> overrides = Map.of(ServerboundPlaceRecipePacket.class, new PacketLimit(4.0, 500.0, PacketLimit.ViolateAction.DROP));
 
         @ConfigSerializable
         public record PacketLimit(@Required double interval, @Required double maxPacketRate, ViolateAction action) {
