@@ -200,7 +200,7 @@ public class SpigotWorldConfig {
     public int animalActivationRange = 32;
     public int monsterActivationRange = 32;
     public int raiderActivationRange = 64;
-    public int miscActivationRange = 16;
+    public int miscActivationRange = 128;
     public int flyingMonsterActivationRange = 32;
     public int waterActivationRange = 16;
     public int villagerActivationRange = 32;
@@ -284,7 +284,7 @@ public class SpigotWorldConfig {
         }
         this.hopperCheck = this.getInt("ticks-per.hopper-check", 1);
         this.hopperAmount = this.getInt("hopper-amount", 1);
-        this.hopperCanLoadChunks = this.getBoolean("hopper-can-load-chunks", false);
+        this.hopperCanLoadChunks = this.getBoolean("hopper-can-load-chunks", true);
         this.log("Hopper Transfer: " + this.hopperTransfer + " Hopper Check: " + this.hopperCheck + " Hopper Amount: " + this.hopperAmount + " Hopper Can Load Chunks: " + this.hopperCanLoadChunks);
     }
 
@@ -410,9 +410,9 @@ public class SpigotWorldConfig {
     public int maxTntTicksPerTick;
     private void maxTntPerTick() {
         if (SpigotConfig.version < 7) {
-            this.set("max-tnt-per-tick", 100);
+            this.set("max-tnt-per-tick", 10000);
         }
-        this.maxTntTicksPerTick = this.getInt("max-tnt-per-tick", 100);
+        this.maxTntTicksPerTick = this.getInt("max-tnt-per-tick", 10000);
         this.log("Max TNT Explosions: " + this.maxTntTicksPerTick);
     }
 

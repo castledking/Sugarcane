@@ -116,10 +116,10 @@
 +            this.kill(level, source); // CraftBukkit
 +            // CraftBukkit end
              return false;
-         }
- 
+        }
+
 -        if (this.isInvulnerableTo(level, source) || this.invisible || this.isMarker()) {
-+        if (this.isInvulnerableTo(level, source) /*|| this.invisible*/ || this.isMarker()) { // CraftBukkit
++        if (this.isInvulnerableTo(level, source) || this.invisible || this.isMarker()) { // CraftBukkit
              return false;
          }
  
