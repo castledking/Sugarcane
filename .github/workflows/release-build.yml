@@ -38,7 +38,8 @@ jobs:
         run: |
           ./gradlew applyPatches
           ./gradlew createMojmapPaperclipJar
-          mv paper-server/build/libs/paper-paperclip-*-mojmap.jar paper-server/build/libs/sugarcane-1.21.11-${{ github.run_number }}.jar
+          BUILD_NUM=$(cat build.number | tr -d '[:space:]')
+          mv paper-server/build/libs/paper-paperclip-*-mojmap.jar paper-server/build/libs/sugarcane-1.21.11-${BUILD_NUM}.jar
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
