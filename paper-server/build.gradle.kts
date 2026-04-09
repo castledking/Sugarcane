@@ -191,21 +191,23 @@ tasks.jar {
         val git = Git(rootProject.layout.projectDirectory.path)
         val mcVersion = rootProject.providers.gradleProperty("mcVersion").get()
         val build = System.getenv("BUILD_NUMBER") ?: null
-        val buildTime = providers.environmentVariable("BUILD_STARTED_AT").map(Instant::parse).orElse(Instant.EPOCH).get()
         val gitHash = git.exec(providers, "rev-parse", "--short=7", "HEAD").get().trim()
         val implementationVersion = "$mcVersion-${build ?: "DEV"}-$gitHash"
         val date = git.exec(providers, "show", "-s", "--format=%ci", gitHash).get().trim()
+        // Parse git commit date format "YYYY-MM-DD HH:MM:SS +ZZZZ" to ISO format "YYYY-MM-DDTHH:MM:SS+ZZ:ZZ"
+        val parts = date.split(" ")
+        val buildTime = Instant.parse("${parts[0]}T${parts[1]}${parts[2].substring(0, 3)}:${parts[2].substring(3)}")
         val gitBranch = git.exec(providers, "rev-parse", "--abbrev-ref", "HEAD").get().trim()
         attributes(
             "Main-Class" to "org.bukkit.craftbukkit.Main",
-            "Implementation-Title" to "Paper",
+            "Implementation-Title" to "Sugarcane",
             "Implementation-Version" to implementationVersion,
             "Implementation-Vendor" to date,
-            "Specification-Title" to "Paper",
+            "Specification-Title" to "Sugarcane",
             "Specification-Version" to project.version,
-            "Specification-Vendor" to "Paper Team",
-            "Brand-Id" to "papermc:paper",
-            "Brand-Name" to "Paper",
+            "Specification-Vendor" to "Sugarcane Team",
+            "Brand-Id" to "sugarcane:sugarcane",
+            "Brand-Name" to "Sugarcane",
             "Build-Number" to (build ?: ""),
             "Build-Time" to buildTime.toString(),
             "Git-Branch" to gitBranch,

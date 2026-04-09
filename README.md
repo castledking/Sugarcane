@@ -54,7 +54,7 @@ Sugarcane restores or improves the following behaviors:
 - **Fixes piston bolts** → protects long-distance transport systems from skipping ticks
 
 ### 👥 Mob Spawning
-- **Disables per-player mob spawning** → enforces global caps
+- **Improves per-player mob spawning** → provides granular control over mobcap influence radius
 - **Restores global mob cap behavior** → global mob switches work again
 
 ### 🛠️ Automation & Crafting
@@ -63,23 +63,80 @@ Sugarcane restores or improves the following behaviors:
 
 ---
 
-## 🧠 Design Philosophy
+## 🌱 Localized Mobcaps
 
-Sugarcane follows a simple principle:
+Sugarcane improves upon Paper's per-player mob spawns by providing granular control over mobcap influence radius while preserving vanilla-like local behavior.
 
-> **If it works in vanilla, it should work here.**
+### 🧠 What it does
 
-- No arbitrary limits.
-- No hidden behavior changes.
-- No “optimized away” mechanics.
+Localized Mobcaps enhances Paper's per-player spawning system by allowing you to configure exactly how far each player's mobcap influence extends. This prevents distant players from interfering with each other's farms while maintaining natural local spawning behavior.
+
+When enabled:
+
+Mobcaps are evaluated locally around each player with a configurable radius
+Only mobs within the configured radius contribute to spawn limits
+Distant players no longer interfere with each other's farms
+Nearby players still share local spawning areas (more natural than strict private pools)
+
+### ⚙️ Configuration
+
+Located in paper-world-defaults.yml (or per-world config):
+
+```
+sugarcane:
+  spawning:
+    local-mobcap:
+      enabled: true
+      # Radius in chunks for local mobcap calculation.
+      # Vanilla uses ~8 chunks (128 blocks).
+      # Lower = more isolated players, stronger mob switches
+      # Higher = more shared spawning, less isolation
+      count-radius-chunks: 8
+      ignore-spectators: true
+      use-full-vertical-range: true
+```
+
+### Defaults:
+
+Enabled by default to provide a better-than-Paper experience with configurable radius
+Recommended radius: 8 chunks (128 blocks) - matches vanilla spawn distance
+
+### 🔍 Behavior
+
+Mobcaps are scaled based on nearby chunks (vanilla-style scaling)
+Only mobs within the configured radius count toward a player's spawning limits
+Nearby players still influence each other (more natural than strict per-player pools)
+Distant players are effectively isolated, preventing cross-region interference
 
 ### ⚖️ Tradeoffs
 
-Sugarcane intentionally removes several performance safeguards. This means higher CPU usage under heavy load, more aggressive chunk loading, and potential lag if used on non-pregenerated worlds.
+This feature improves upon Paper's per-player mob spawns:
 
-**This is expected and intentional.**
+✅ Configurable influence radius (not fixed at spawn distance)
+✅ More natural local behavior (nearby players share areas)
+✅ Prevents cross-player mobcap interference at distance
+✅ Farms work independently at configurable distances
+⚠️ Behavior differs from vanilla global caps
+⚠️ Global mob switches no longer affect the entire server
 
----
+### 🎯 When to use it
+
+Enable this if:
+
+Your server has multiple active players in different areas
+Players are unintentionally breaking each other’s farms
+You want a better multiplayer experience without full per-player mobcaps
+
+Leave it disabled if:
+
+You want strict vanilla behavior
+Your server relies heavily on global mob switches
+
+This keeps it:
+
+clearly optional
+framed as a Sugarcane-specific feature
+aligned with your “vanilla-first” philosophy without contradicting it
 
 ## 🚀 When to Use Sugarcane
 

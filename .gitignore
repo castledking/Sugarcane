@@ -41,6 +41,7 @@ out/
 # other stuff
 run/
 logs/
+Localized Mob Caps/
 
 !gradle/wrapper/gradle-wrapper.jar
 

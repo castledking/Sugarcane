@@ -30,7 +30,7 @@ public record ServerBuildInfoImpl(
     private static final String ATTRIBUTE_GIT_BRANCH = "Git-Branch";
     private static final String ATTRIBUTE_GIT_COMMIT = "Git-Commit";
 
-    private static final String BRAND_PAPER_NAME = "Paper";
+    private static final String BRAND_PAPER_NAME = "Sugarcane";
 
     private static final String BUILD_DEV = "DEV";
 
@@ -74,18 +74,9 @@ public record ServerBuildInfoImpl(
         } else {
             sb.append(BUILD_DEV);
         }
-        final boolean hasGitBranch = this.gitBranch.isPresent();
         final boolean hasGitCommit = this.gitCommit.isPresent();
-        if (hasGitBranch || hasGitCommit) {
-            sb.append('-');
-        }
-        if (hasGitBranch && representation == StringRepresentation.VERSION_FULL) {
-            sb.append(this.gitBranch.get());
-            if (hasGitCommit) {
-                sb.append('@');
-            }
-        }
         if (hasGitCommit) {
+            sb.append('-');
             sb.append(this.gitCommit.get());
         }
         if (representation == StringRepresentation.VERSION_FULL) {
