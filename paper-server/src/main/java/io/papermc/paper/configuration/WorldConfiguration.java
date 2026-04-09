@@ -587,4 +587,21 @@ public class WorldConfiguration extends ConfigurationPart {
         	HORIZONTAL_FIRST_OUTWARD, HORIZONTAL_FIRST_INWARD, VERTICAL_FIRST_OUTWARD, VERTICAL_FIRST_INWARD
         }
     }
+
+    public Sugarcane sugarcane;
+
+    public class Sugarcane extends ConfigurationPart {
+        public Spawning spawning;
+
+        public class Spawning extends ConfigurationPart {
+            public LocalMobcap localMobcap;
+
+            public class LocalMobcap extends ConfigurationPart {
+                public boolean enabled = true;
+                public int countRadiusChunks = 8;
+                public boolean ignoreSpectators = true;
+                public boolean useFullVerticalRange = true;
+            }
+        }
+    }
 }
