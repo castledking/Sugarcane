@@ -1,8 +1,9 @@
 name: Build Release
 
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -35,14 +36,29 @@ jobs:
           git config --global user.name "Sugarcane CI"
 
       - name: Build Paperclip Jar
+        id: build
         run: |
           ./gradlew applyPatches
           ./gradlew createMojmapPaperclipJar
           BUILD_NUM=$(cat build.number | tr -d '[:space:]')
-          mv paper-server/build/libs/paper-paperclip-*-mojmap.jar paper-server/build/libs/sugarcane-1.21.11-${BUILD_NUM}.jar
+          JAR_NAME="sugarcane-1.21.11-${BUILD_NUM}.jar"
+          mv paper-server/build/libs/paper-paperclip-*-mojmap.jar "paper-server/build/libs/${JAR_NAME}"
+          {
+            echo "build_num=${BUILD_NUM}"
+            echo "jar_name=${JAR_NAME}"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Upload to Release
+      - name: Prepare release body
+        run: |
+          git log -1 --pretty=%B > release_body.md
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: paper-server/build/libs/sugarcane-*.jar
+          tag_name: build-${{ steps.build.outputs.build_num }}
+          target_commitish: ${{ github.sha }}
+          name: "Build #${{ steps.build.outputs.build_num }}"
+          body_path: release_body.md
+          files: paper-server/build/libs/${{ steps.build.outputs.jar_name }}
+          make_latest: true
           token: ${{ secrets.GITHUB_TOKEN }}

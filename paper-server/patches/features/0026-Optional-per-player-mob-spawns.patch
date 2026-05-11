@@ -72,7 +72,7 @@ index 75fe6e026e3f91b66dcf5b97a86491d5277f7661..9b8222bda0f119f272d90f980c9f9540
              // Paper start - chunk tick iteration optimisation
              this.shuffleRandom.setSeed(this.level.random.nextLong());
 -            Util.shuffle(list, this.shuffleRandom);
-+            if (!this.level.paperConfig().entities.spawning.perPlayerMobSpawns) Util.shuffle(list, this.shuffleRandom); // Paper - Optional per player mob spawns; do not need this when per-player is enabled
++            Util.shuffle(list, this.shuffleRandom); // Sugarcane - keep per-player spawning fair while players are stationary
              // Paper end - chunk tick iteration optimisation
              profiler.popPush("tickSpawningChunks");
  
