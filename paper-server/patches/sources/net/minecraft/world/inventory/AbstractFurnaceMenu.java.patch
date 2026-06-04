@@ -5,7 +5,7 @@
      private final RecipePropertySet acceptedInputs;
      private final RecipeBookType recipeBookType;
 +    // CraftBukkit start
-+    private @javax.annotation.Nullable org.bukkit.craftbukkit.inventory.view.CraftFurnaceView view = null;
++    private org.bukkit.craftbukkit.inventory.view.@org.jspecify.annotations.Nullable CraftFurnaceView view = null;
 +    private final Inventory inventory;
 +
 +    @Override
@@ -21,7 +21,7 @@
 +    // CraftBukkit end
  
      protected AbstractFurnaceMenu(
-         MenuType<?> menuType,
+         final MenuType<?> menuType,
 @@ -68,6 +_,7 @@
          this.addSlot(new Slot(container, 0, 56, 17));
          this.addSlot(new FurnaceFuelSlot(this, container, 1, 56, 53));
@@ -33,7 +33,7 @@
 @@ -85,6 +_,7 @@
  
      @Override
-     public boolean stillValid(Player player) {
+     public boolean stillValid(final Player player) {
 +        if (!this.checkReachable) return true; // CraftBukkit
          return this.container.stillValid(player);
      }
