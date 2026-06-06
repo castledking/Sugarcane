@@ -42,10 +42,13 @@ jobs:
           ./gradlew createMojmapPaperclipJar
           BUILD_NUM=$(cat build.number | tr -d '[:space:]')
           JAR_NAME="sugarcane-1.21.11-${BUILD_NUM}.jar"
+          JAR_NAME_API="sugarcane-26.1.2-${BUILD_NUM}.jar"
           mv paper-server/build/libs/paper-paperclip-*-mojmap.jar "paper-server/build/libs/${JAR_NAME}"
+          cp "paper-server/build/libs/${JAR_NAME}" "paper-server/build/libs/${JAR_NAME_API}"
           {
             echo "build_num=${BUILD_NUM}"
             echo "jar_name=${JAR_NAME}"
+            echo "jar_name_api=${JAR_NAME_API}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Prepare release body
@@ -59,6 +62,8 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: "Build #${{ steps.build.outputs.build_num }}"
           body_path: release_body.md
-          files: paper-server/build/libs/${{ steps.build.outputs.jar_name }}
+          files: |
+            paper-server/build/libs/${{ steps.build.outputs.jar_name }}
+            paper-server/build/libs/${{ steps.build.outputs.jar_name_api }}
           make_latest: true
           token: ${{ secrets.GITHUB_TOKEN }}
