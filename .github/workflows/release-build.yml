@@ -2,8 +2,8 @@ name: Build Release
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'Build #'  # Matches tags like "Build #5"
 
 permissions:
   contents: write
@@ -35,35 +35,52 @@ jobs:
           git config --global user.email "ci@sugarcane.internal"
           git config --global user.name "Sugarcane CI"
 
+      - name: Extract build number from tag
+        id: extract
+        run: |
+          # Tag format: "Build #5"
+          BUILD_NUM=${GITHUB_REF#refs/tags/Build\ #}
+          {
+            echo "build_num=${BUILD_NUM}"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build Paperclip Jar
         id: build
         run: |
           ./gradlew applyPatches
-          ./gradlew createPaperclipJar
-          BUILD_NUM=$(cat build.number | tr -d '[:space:]')
-          JAR_NAME="sugarcane-26.1.2-${BUILD_NUM}.jar"
-          JAR_NAME_MC="sugarcane-1.21.11-${BUILD_NUM}.jar"
+          BUILD_NUMBER=${{ steps.extract.outputs.build_num }} ./gradlew createPaperclipJar
+          JAR_NAME="sugarcane-26.1.2-${{ steps.extract.outputs.build_num }}.jar"
           mv paper-server/build/libs/paper-paperclip-*.jar "paper-server/build/libs/${JAR_NAME}"
-          cp "paper-server/build/libs/${JAR_NAME}" "paper-server/build/libs/${JAR_NAME_MC}"
           {
-            echo "build_num=${BUILD_NUM}"
             echo "jar_name=${JAR_NAME}"
-            echo "jar_name_mc=${JAR_NAME_MC}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Prepare release body
         run: |
-          git log -1 --pretty=%B > release_body.md
+          cat > release_body.md << 'EOF'
+          ## Sugarcane Build #${{ steps.extract.outputs.build_num }}
+          
+          **Version:** 26.1.2
+          **Build:** #${{ steps.extract.outputs.build_num }}
+          
+          ### Downloads
+          - `sugarcane-26.1.2-${{ steps.extract.outputs.build_num }}.jar`
+          
+          ### Requirements
+          - Java 21+
+          - Paper API 26.1.2
+          
+          ### Installation
+          Replace your existing Paper jar with this file. All Paper plugins and configurations are compatible.
+          EOF
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ steps.build.outputs.build_num }}
+          tag_name: ${{ github.ref_name }}
           target_commitish: ${{ github.sha }}
-          name: "Build #${{ steps.build.outputs.build_num }}"
+          name: "Sugarcane 26.1.2 Build #${{ steps.extract.outputs.build_num }}"
           body_path: release_body.md
-          files: |
-            paper-server/build/libs/${{ steps.build.outputs.jar_name }}
-            paper-server/build/libs/${{ steps.build.outputs.jar_name_mc }}
+          files: paper-server/build/libs/${{ steps.build.outputs.jar_name }}
           make_latest: true
           token: ${{ secrets.GITHUB_TOKEN }}
