@@ -3,7 +3,7 @@ name: Build Release
 on:
   push:
     tags:
-      - 'Build #'  # Matches tags like "Build #5"
+      - 'build-*'  # Matches tags like "build-5"
 
 permissions:
   contents: write
@@ -38,8 +38,8 @@ jobs:
       - name: Extract build number from tag
         id: extract
         run: |
-          # Tag format: "Build #5"
-          BUILD_NUM=${GITHUB_REF#refs/tags/Build\ #}
+          # Tag format: "build-5"
+          BUILD_NUM=${GITHUB_REF#refs/tags/build-}
           {
             echo "build_num=${BUILD_NUM}"
           } >> "$GITHUB_OUTPUT"
