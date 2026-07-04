@@ -67,7 +67,7 @@ jobs:
           - `sugarcane-26.1.2-${{ steps.extract.outputs.build_num }}.jar`
           
           ### Requirements
-          - Java 21+
+          - Java 25+
           - Paper API 26.1.2
           
           ### Installation
