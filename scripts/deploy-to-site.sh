@@ -29,8 +29,17 @@ TARGET_DIR="${DL_DIR}/${MC_VERSION}/${BUILD_NUM}"
 
 echo ":: Building Sugarcane ${MC_VERSION} build ${BUILD_NUM}"
 
-git config user.name "Sugarcane Builder" 2>/dev/null || true
-git config user.email "builder@sugarcane.internal" 2>/dev/null || true
+# Do NOT set git config here. "git config user.name ..." writes to .git/config and
+# persists, so every later commit in this repo gets stamped with that identity as the
+# committer - which is how "Sugarcane Builder" ended up next to real commits on GitHub.
+# Paperweight needs some identity for its internal rebases; require a real one instead.
+if ! git config --get user.email >/dev/null || ! git config --get user.name >/dev/null; then
+    echo "!! No git identity configured. Paperweight needs one for its patch rebases." >&2
+    echo "   Set one globally, e.g.:" >&2
+    echo "     git config --global user.name  'Your Name'" >&2
+    echo "     git config --global user.email 'you@example.com'" >&2
+    exit 1
+fi
 
 echo ":: Applying patches..."
 ./gradlew applyPatches
