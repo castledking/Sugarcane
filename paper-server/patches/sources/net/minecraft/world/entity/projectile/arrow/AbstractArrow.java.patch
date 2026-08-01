@@ -39,6 +39,15 @@
          if (this.isInGround() && movement.lengthSqr() > 0.0) {
              this.setInGround(false);
          }
+@@ -184,7 +_,7 @@
+ 
+                 for (AABB aabb : shape.toAabbs()) {
+                     if (aabb.move(blockPos).contains(position)) {
+-                        this.setDeltaMovement(Vec3.ZERO);
++                        if (!this.level().paperConfig().sugarcane.projectiles.retainMomentumWhenEmbedded) this.setDeltaMovement(Vec3.ZERO); // Sugarcane - restore pre-1.21.5 embedded arrow momentum
+                         this.setInGround(true);
+                         break;
+                     }
 @@ -218,6 +_,10 @@
                  this.setSharedFlagOnFire(this.getRemainingFireTicks() > 0);
              }

@@ -1,0 +1,17 @@
+--- a/net/minecraft/world/entity/projectile/ProjectileUtil.java
++++ b/net/minecraft/world/entity/projectile/ProjectileUtil.java
+@@ -221,12 +_,14 @@
+                     if (!outsideHit.isEmpty()) {
+                         Vec3 outsideHitPosition = outsideHit.get();
+                         Vec3 towardsTarget = entityBB.getCenter();
++                        if (!level.paperConfig().sugarcane.projectiles.allowSurfaceHitsThroughBlocks) { // Sugarcane - restore pre-1.21.11 margin hits through blocks
+                         BlockHitResult hitResult = level.clipIncludingBorder(
+                             new ClipContext(outsideHitPosition, towardsTarget, clipType, ClipContext.Fluid.NONE, source)
+                         );
+                         if (hitResult.getType() != HitResult.Type.MISS) {
+                             towardsTarget = hitResult.getLocation();
+                         }
++                        } // Sugarcane - restore pre-1.21.11 margin hits through blocks
+ 
+                         Optional<Vec3> surfaceHit = entity.getBoundingBox().clip(outsideHitPosition, towardsTarget);
+                         if (surfaceHit.isPresent()) {

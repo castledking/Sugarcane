@@ -610,5 +610,19 @@ public class WorldConfiguration extends ConfigurationPart {
                 public boolean useFullVerticalRange = true;
             }
         }
+
+        public Projectiles projectiles;
+
+        public class Projectiles extends ConfigurationPart {
+            // 1.21.5 started zeroing an arrow's delta movement when it embeds in a block. startFalling()
+            // derives its random spread from that delta, so post-1.21.5 a dislodged arrow always leaves
+            // with zero velocity. Restores the 1.21.4 behaviour that arrow rail cannons depend on.
+            public boolean retainMomentumWhenEmbedded = true;
+            // 1.21.11 replaced getEntityHitResult with getManyEntityHitResult (for multi-hit spears), which
+            // added a line-of-sight clip between the expanded margin and the target centre. That killed
+            // margin hits through a block, e.g. an arrow held by a trapdoor deflecting a wind charge.
+            // Off by default: enabling it also lets spears/arrows hit players through solid blocks.
+            public boolean allowSurfaceHitsThroughBlocks = false;
+        }
     }
 }

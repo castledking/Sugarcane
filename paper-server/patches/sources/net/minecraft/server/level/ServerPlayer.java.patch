@@ -210,6 +210,26 @@
                  if (enderPearl.isRemoved()) {
                      LOGGER.warn("Trying to save removed ender pearl, skipping");
                  } else {
+@@ -502,6 +_,19 @@
+         if (!pearlLevelKey.isEmpty()) {
+             ServerLevel pearlLevel = this.level().getServer().getLevel(pearlLevelKey.get());
+             if (pearlLevel != null) {
++                // Sugarcane start - if the pearl was already restored from chunk data, re-register that instance.
++                // Loading it again would be rejected by the UUID check in EntityLookup#addEntity, leaving the pearl
++                // out of this.enderPearls with no ENDER_PEARL ticket keeping its chunk loaded.
++                Optional<UUID> pearlUUID = pearlInput.read("UUID", UUIDUtil.CODEC);
++                if (pearlUUID.isPresent()) {
++                    Entity existing = pearlLevel.getEntity(pearlUUID.get());
++                    if (existing instanceof ThrownEnderpearl existingPearl) {
++                        this.registerEnderPearl(existingPearl);
++                        placeEnderPearlTicket(pearlLevel, existingPearl.chunkPosition());
++                        return;
++                    }
++                }
++                // Sugarcane end - if the pearl was already restored from chunk data, re-register that instance
+                 Entity pearl = EntityType.loadEntityRecursive(
+                     pearlInput, pearlLevel, EntitySpawnReason.LOAD, entity -> !pearlLevel.addWithUUID(entity) ? null : entity
+                 );
 @@ -580,6 +_,11 @@
  
      @Override
