@@ -26,6 +26,7 @@ class SpigotPluginProviderFactory implements PluginTypeFactory<SpigotPluginProvi
 
     @Override
     public SpigotPluginProvider build(JarFile file, PluginDescriptionFile configuration, Path source) throws InvalidDescriptionException {
+        io.papermc.paper.sugarcane.FoliaMode.checkSupported(configuration); // Sugarcane - force-folia
         // Copied from SimplePluginManager#loadPlugins
         // Spigot doesn't validate the name when the config is created, and instead when the plugin is loaded.
         // Paper plugin configuration will do these checks in config serializer instead of when this is created.

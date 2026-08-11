@@ -80,11 +80,14 @@ jobs:
 
       - name: Prepare release body
         run: |
+          # Sugarcane is a fork of PaperMC/Paper, so GitHub resolves a bare "#7" in release markdown
+          # against the *parent* repo's issue tracker. Code spans are never autolinked, so the build
+          # number renders as "#7" and stays a build number.
           cat > release_body.md << 'EOF'
-          ## Sugarcane Build #${{ steps.extract.outputs.build_num }}
-          
+          ## Sugarcane Build `#${{ steps.extract.outputs.build_num }}`
+
           **Version:** ${{ steps.version.outputs.mc_version }}
-          **Build:** #${{ steps.extract.outputs.build_num }}
+          **Build:** `#${{ steps.extract.outputs.build_num }}`
 
           ### Downloads
           - `${{ steps.build.outputs.jar_name }}`

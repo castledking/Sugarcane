@@ -514,6 +514,11 @@ public class CraftScheduler implements BukkitScheduler {
     }
 
     protected CraftTask handle(final CraftTask task, final long delay) { // Paper
+        // Sugarcane start - force-folia - match Folia, which has no legacy scheduler at all
+        if (io.papermc.paper.sugarcane.FoliaMode.strictScheduler()) {
+            throw new UnsupportedOperationException("The legacy BukkitScheduler is not available while sugarcane.folia.force-folia is enabled. Use the Folia schedulers (Bukkit.getGlobalRegionScheduler(), Bukkit.getRegionScheduler(), Bukkit.getAsyncScheduler(), Entity#getScheduler()) instead.");
+        }
+        // Sugarcane end - force-folia
         // Paper start
         if (!this.isAsyncScheduler && !task.isSync()) {
             this.asyncScheduler.handle(task, delay);

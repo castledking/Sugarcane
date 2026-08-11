@@ -267,6 +267,19 @@ public final class PluginDescriptionFile implements io.papermc.paper.plugin.conf
         return this.paperPluginLoader;
     }
     // Paper end - plugin loader api
+    // Sugarcane start - force-folia
+    private static final String FOLIA_SUPPORTED_KEY = "folia-supported";
+    private String foliaSupported;
+
+    /**
+     * Returns whether the plugin has been marked to be compatible with regionised threading as provided
+     * by Folia, via {@code folia-supported: true} in plugin.yml.
+     */
+    @Override
+    public boolean isFoliaSupported() {
+        return this.foliaSupported != null && this.foliaSupported.equalsIgnoreCase("true");
+    }
+    // Sugarcane end - force-folia
     // Paper start - oh my goddddd
     /**
      * @hidden
@@ -1227,6 +1240,12 @@ public final class PluginDescriptionFile implements io.papermc.paper.plugin.conf
             apiVersion = map.get("api-version").toString();
         }
 
+        // Sugarcane start - force-folia
+        if (map.get(FOLIA_SUPPORTED_KEY) != null) {
+            foliaSupported = map.get(FOLIA_SUPPORTED_KEY).toString();
+        }
+        // Sugarcane end - force-folia
+
         if (map.get("libraries") != null) {
             ImmutableList.Builder<String> contributorsBuilder = ImmutableList.<String>builder();
             try {
@@ -1343,6 +1362,12 @@ public final class PluginDescriptionFile implements io.papermc.paper.plugin.conf
         if (prefix != null) {
             map.put("prefix", prefix);
         }
+
+        // Sugarcane start - force-folia
+        if (foliaSupported != null) {
+            map.put(FOLIA_SUPPORTED_KEY, foliaSupported);
+        }
+        // Sugarcane end - force-folia
 
         return map;
     }

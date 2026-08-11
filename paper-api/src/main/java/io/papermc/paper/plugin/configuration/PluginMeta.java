@@ -189,4 +189,19 @@ public interface PluginMeta extends Namespaced {
     default String namespace() {
         return this.getName().toLowerCase(Locale.ROOT);
     }
+
+    // Sugarcane start - force-folia
+    /**
+     * Returns whether the plugin has been marked to be compatible with regionised threading as provided
+     * by Folia, via {@code folia-supported: true} in its plugin configuration.
+     * <p>
+     * Sugarcane only enforces this when {@code sugarcane.folia.force-folia} is enabled in
+     * {@code paper-global.yml}; otherwise plugins load regardless of this value.
+     *
+     * @return true if the plugin declares Folia support
+     */
+    default boolean isFoliaSupported() {
+        return false;
+    }
+    // Sugarcane end - force-folia
 }

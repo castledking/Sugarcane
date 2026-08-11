@@ -394,6 +394,12 @@ public final class CraftMagicNumbers implements UnsafeValues {
             throw new InvalidPluginException("Unsupported API version " + descriptionFile.getAPIVersion());
         }
 
+        // Sugarcane start - force-folia
+        if (io.papermc.paper.sugarcane.FoliaMode.forceFolia() && !descriptionFile.isFoliaSupported()) {
+            throw new InvalidPluginException("Plugin " + descriptionFile.getFullName() + " is not marked as supporting regionised multithreading");
+        }
+        // Sugarcane end - force-folia
+
         if (toCheck.isOlderThan(minimumVersion)) {
             // Older than supported
             throw new InvalidPluginException("Plugin API version " + descriptionFile.getAPIVersion() + " is lower than the minimum allowed version. Please update or replace it.");

@@ -5,10 +5,10 @@ Subject: [PATCH] Anti-Xray
 
 
 diff --git a/io/papermc/paper/FeatureHooks.java b/io/papermc/paper/FeatureHooks.java
-index 82377ee76caac220f7565cb729b9e608206a685a..504fdb2c4000eafae4341ec8b24ce9cb0fcdc274 100644
+index 6a670161ff746b5ec780a0cdc92cdfbba525e832..8817af1a147e7560bed8cc75df4295f281cbe0af 100644
 --- a/io/papermc/paper/FeatureHooks.java
 +++ b/io/papermc/paper/FeatureHooks.java
-@@ -47,20 +47,25 @@ public final class FeatureHooks {
+@@ -51,20 +51,25 @@ public final class FeatureHooks {
      }
  
      public static LevelChunkSection createSection(final PalettedContainerFactory palettedContainerFactory, final Level level, final ChunkPos chunkPos, final int chunkSection) {
@@ -155,7 +155,7 @@ index a94e6ca1d396b6b0781de5d550c4a804274ee003..a1018e9ca9dfb978d6e6633577abd7d5
  
      private ClientboundLevelChunkWithLightPacket(final RegistryFriendlyByteBuf input) {
 diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
-index 586b7de5147dccb9dfa84766c71db9b58bc39abc..ca1725b9ad40f41e241447e14948ee4116c3e4c9 100644
+index 762e3b71a8df572234b03dec60d2b6e1e339bb6a..59598bfb95c2f8a38efd92685c46a954dc76739d 100644
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
 @@ -634,7 +634,7 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet

@@ -64,6 +64,7 @@ public class PaperPluginMeta implements PluginMeta {
     private PermissionConfiguration permissionConfiguration = new PermissionConfiguration(PermissionDefault.OP, List.of());
     @Required
     private ApiVersion apiVersion;
+    private boolean foliaSupported = false; // Sugarcane - force-folia
 
     private Map<PluginDependencyLifeCycle, Map<String, DependencyConfiguration>> dependencies = new EnumMap<>(PluginDependencyLifeCycle.class);
 
@@ -250,6 +251,13 @@ public class PaperPluginMeta implements PluginMeta {
     public @NotNull String getAPIVersion() {
         return this.apiVersion.getVersionString();
     }
+
+    // Sugarcane start - force-folia
+    @Override
+    public boolean isFoliaSupported() {
+        return this.foliaSupported;
+    }
+    // Sugarcane end - force-folia
 
     @Override
     public @NotNull List<String> getProvidedPlugins() {
