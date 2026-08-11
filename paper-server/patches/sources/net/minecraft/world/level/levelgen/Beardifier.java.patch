@@ -1,0 +1,66 @@
+--- a/net/minecraft/world/level/levelgen/Beardifier.java
++++ b/net/minecraft/world/level/levelgen/Beardifier.java
+@@ -91,11 +_,23 @@
+         return encompassingBox == null ? newBox : BoundingBox.encapsulating(encompassingBox, newBox);
+     }
+ 
++    // Sugarcane start - Leaf - C2ME - optimize world gen math
++    // compute() runs per density sample near a structure, so the iterators these lists hand out are one of
++    // the hotter allocation sources during structure-heavy generation. The lists are immutable after
++    // construction, so snapshot them once here rather than lazily.
++    private final Beardifier.Rigid[] pieceArray;
++    private final JigsawJunction[] junctionArray;
++    // Sugarcane end - Leaf - C2ME - optimize world gen math
++
+     @VisibleForTesting
+     public Beardifier(final List<Beardifier.Rigid> pieces, final List<JigsawJunction> junctions, final @Nullable BoundingBox affectedBox) {
+         this.pieces = pieces;
+         this.junctions = junctions;
+         this.affectedBox = affectedBox;
++        // Sugarcane start - Leaf - C2ME - optimize world gen math
++        this.pieceArray = pieces.toArray(Beardifier.Rigid[]::new);
++        this.junctionArray = junctions.toArray(JigsawJunction[]::new);
++        // Sugarcane end - Leaf - C2ME - optimize world gen math
+     }
+ 
+     @Override
+@@ -122,7 +_,9 @@
+ 
+         double noiseValue = 0.0;
+ 
+-        for (Beardifier.Rigid rigid : this.pieces) {
++        // Sugarcane start - Leaf - C2ME - optimize world gen math - array iteration, and the two switches
++        // over the same terrain adjustment folded into one
++        for (Beardifier.Rigid rigid : this.pieceArray) {
+             BoundingBox box = rigid.box();
+             int groundLevelDelta = rigid.groundLevelDelta();
+             int dx = Math.max(0, Math.max(box.minX() - blockX, blockX - box.maxX()));
+@@ -130,22 +_,17 @@
+             int groundY = box.minY() + groundLevelDelta;
+             int dyToGround = blockY - groundY;
+ 
+-            int dy = switch (rigid.terrainAdjustment()) {
+-                case NONE -> 0;
+-                case BURY, BEARD_THIN -> dyToGround;
+-                case BEARD_BOX -> Math.max(0, Math.max(groundY - blockY, blockY - box.maxY()));
+-                case ENCAPSULATE -> Math.max(0, Math.max(box.minY() - blockY, blockY - box.maxY()));
+-            };
+-
+             noiseValue += switch (rigid.terrainAdjustment()) {
+                 case NONE -> 0.0;
+-                case BURY -> getBuryContribution(dx, dy / 2.0, dz);
+-                case BEARD_THIN, BEARD_BOX -> getBeardContribution(dx, dy, dz, dyToGround) * 0.8;
+-                case ENCAPSULATE -> getBuryContribution(dx / 2.0, dy / 2.0, dz / 2.0) * 0.8;
++                case BURY -> getBuryContribution(dx, dyToGround / 2.0, dz);
++                case BEARD_THIN -> getBeardContribution(dx, dyToGround, dz, dyToGround) * 0.8;
++                case BEARD_BOX -> getBeardContribution(dx, Math.max(0, Math.max(groundY - blockY, blockY - box.maxY())), dz, dyToGround) * 0.8;
++                case ENCAPSULATE -> getBuryContribution(dx / 2.0, Math.max(0, Math.max(box.minY() - blockY, blockY - box.maxY())) / 2.0, dz / 2.0) * 0.8;
+             };
+         }
+ 
+-        for (JigsawJunction junction : this.junctions) {
++        for (JigsawJunction junction : this.junctionArray) {
++            // Sugarcane end - Leaf - C2ME - optimize world gen math
+             int dx = blockX - junction.getSourceX();
+             int dy = blockY - junction.getSourceGroundY();
+             int dz = blockZ - junction.getSourceZ();

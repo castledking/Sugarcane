@@ -23691,7 +23691,7 @@ index 639ff94cd3cdd350a0ce7bee48560baedaa3c8c3..a272e07a13b74c7c2f1f2f9c055c78aa
 +        ((ca.spottedleaf.moonrise.patches.chunk_system.player.ChunkSystemServerPlayer)player).moonrise$getViewDistanceHolder().setSendViewDistance(distance); // Paper - rewrite chunk system
      }
  
-    public static void flushAsyncAppenders() {
+     public static void flushAsyncAppenders() {
 diff --git a/io/papermc/paper/command/subcommands/ChunkDebugCommand.java b/io/papermc/paper/command/subcommands/ChunkDebugCommand.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..d86bd11e0155f767c3bf66ac05fa4acf6d2bfccb
