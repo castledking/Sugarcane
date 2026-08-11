@@ -24,6 +24,7 @@ class PaperPluginProviderFactory implements PluginTypeFactory<PaperPluginParent,
 
     @Override
     public PaperPluginParent build(JarFile file, PaperPluginMeta configuration, Path source) {
+        io.papermc.paper.sugarcane.FoliaMode.checkSupported(configuration); // Sugarcane - force-folia
         Logger jul = PaperPluginLogger.getLogger(configuration);
         ComponentLogger logger = ComponentLogger.logger(jul.getName());
         PluginProviderContext context = PluginProviderContextImpl.create(configuration, logger, source);

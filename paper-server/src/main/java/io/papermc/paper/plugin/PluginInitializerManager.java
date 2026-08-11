@@ -105,6 +105,7 @@ public class PluginInitializerManager {
 
     public static void load(OptionSet optionSet) throws Exception {
         LOGGER.info("Initializing plugins...");
+        io.papermc.paper.sugarcane.FoliaMode.loadEarly(optionSet); // Sugarcane - force-folia - must run before any provider is built
         // We have to load the bukkit configuration inorder to get the update folder location.
         io.papermc.paper.plugin.PluginInitializerManager pluginSystem = io.papermc.paper.plugin.PluginInitializerManager.init(optionSet);
         if (pluginSystem.pluginRemapper != null) pluginSystem.pluginRemapper.loadingPlugins();
