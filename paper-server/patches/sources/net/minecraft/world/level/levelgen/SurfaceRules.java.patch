@@ -1,0 +1,15 @@
+--- a/net/minecraft/world/level/levelgen/SurfaceRules.java
++++ b/net/minecraft/world/level/levelgen/SurfaceRules.java
+@@ -580,8 +_,10 @@
+     record SequenceRule(List<SurfaceRules.SurfaceRule> rules) implements SurfaceRules.SurfaceRule {
+         @Override
+         public @Nullable BlockState tryApply(int x, int y, int z) {
+-            for (SurfaceRules.SurfaceRule surfaceRule : this.rules) {
+-                BlockState blockState = surfaceRule.tryApply(x, y, z);
++            // Sugarcane start - Leaf - reduce worldgen allocations - indexed loop avoids an iterator per surface column
++            for (int i = 0, size = this.rules.size(); i < size; i++) {
++                BlockState blockState = this.rules.get(i).tryApply(x, y, z);
++                // Sugarcane end - Leaf - reduce worldgen allocations
+                 if (blockState != null) {
+                     return blockState;
+                 }

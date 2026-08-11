@@ -297,7 +297,7 @@ index 0000000000000000000000000000000000000000..1b8193587814225c2ef2c5d9e667436e
 +    }
 +}
 diff --git a/ca/spottedleaf/moonrise/paper/PaperHooks.java b/ca/spottedleaf/moonrise/paper/PaperHooks.java
-index 2a5069d11f47d11726f08b597988f8a58546824b..bf051b6443edd32ecdbd177e02f40965477638de 100644
+index 73caad9ae863ef6f1a57bd9d8bad815d1e926626..4b2850ea5474f7a67a53e25e29acd0a8410b606c 100644
 --- a/ca/spottedleaf/moonrise/paper/PaperHooks.java
 +++ b/ca/spottedleaf/moonrise/paper/PaperHooks.java
 @@ -13,6 +13,7 @@ import net.minecraft.server.level.ChunkHolder;
@@ -5481,10 +5481,10 @@ index 0000000000000000000000000000000000000000..003a857e70ead858e8437e3c1bfaf22f
 +}
 diff --git a/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java b/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..7129c5e1920008ac54f3a8ac83f5589396f4e4e9
+index 0000000000000000000000000000000000000000..4c7209534465ddfb52e8809e747b637f3f3e73ae
 --- /dev/null
 +++ b/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java
-@@ -0,0 +1,1093 @@
+@@ -0,0 +1,1106 @@
 +package ca.spottedleaf.moonrise.patches.chunk_system.player;
 +
 +import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
@@ -5535,6 +5535,13 @@ index 0000000000000000000000000000000000000000..7129c5e1920008ac54f3a8ac83f55893
 +
 +    public static final TicketType PLAYER_TICKET         = ChunkSystemTicketType.create("chunk_system:player_ticket", Long::compareTo, 0L, TicketType.FLAG_LOADING | TicketType.FLAG_SIMULATION | TicketType.FLAG_KEEP_DIMENSION_ACTIVE);
 +    public static final TicketType PLAYER_TICKET_DELAYED = ChunkSystemTicketType.create("chunk_system:player_ticket_delayed", Long::compareTo, 1L, TicketType.FLAG_LOADING | TicketType.FLAG_SIMULATION | TicketType.FLAG_KEEP_DIMENSION_ACTIVE);
++    // Sugarcane start - split ticking and view-distance unload delays
++    // PLAYER_TICKET_DELAYED holds a chunk at its ticking level after it leaves simulation distance, which is
++    // what extends machine runtime past vanilla. This one only holds a chunk at its generated (loaded,
++    // non-ticking) level after it leaves view distance, so it absorbs the unload/reload churn of walking
++    // through fresh terrain without changing how long anything ticks.
++    public static final TicketType PLAYER_TICKET_VIEW_DELAYED = ChunkSystemTicketType.create("chunk_system:player_ticket_view_delayed", Long::compareTo, 1L, TicketType.FLAG_LOADING | TicketType.FLAG_SIMULATION | TicketType.FLAG_KEEP_DIMENSION_ACTIVE);
++    // Sugarcane end - split ticking and view-distance unload delays
 +
 +    public static final int GENERATED_TICKET_LEVEL = ChunkHolderManager.FULL_LOADED_TICKET_LEVEL;
 +    public static final int LOADED_TICKET_LEVEL = ChunkTaskScheduler.getTicketLevel(ChunkStatus.EMPTY);
@@ -5543,6 +5550,12 @@ index 0000000000000000000000000000000000000000..7129c5e1920008ac54f3a8ac83f55893
 +    public static void setUnloadDelay(final long ticks) {
 +        ((ChunkSystemTicketType)(Object)PLAYER_TICKET_DELAYED).moonrise$setTimeout(Math.max(1, ticks));
 +    }
++
++    // Sugarcane start - split ticking and view-distance unload delays
++    public static void setViewUnloadDelay(final long ticks) {
++        ((ChunkSystemTicketType)(Object)PLAYER_TICKET_VIEW_DELAYED).moonrise$setTimeout(Math.max(1, ticks));
++    }
++    // Sugarcane end - split ticking and view-distance unload delays
 +
 +    public static final class ViewDistanceHolder {
 +
@@ -5963,7 +5976,7 @@ index 0000000000000000000000000000000000000000..7129c5e1920008ac54f3a8ac83f55893
 +
 +                parameter.pushDelayedTicketOp(ChunkHolderManager.TicketOperation.addAndRemove(
 +                        chunk,
-+                        PLAYER_TICKET_DELAYED, level, parameter.idBoxed,
++                        PLAYER_TICKET_VIEW_DELAYED, level, parameter.idBoxed, // Sugarcane - split ticking and view-distance unload delays - leaving view distance, not tick range
 +                        PLAYER_TICKET, level, parameter.idBoxed
 +                ));
 +            }
@@ -22268,7 +22281,7 @@ index 0000000000000000000000000000000000000000..95154636727366adfb4fb67e7db8b09f
 +    private SaveUtil() {}
 +}
 diff --git a/io/papermc/paper/FeatureHooks.java b/io/papermc/paper/FeatureHooks.java
-index 61c526263cfbd1871f6b8548ed4431a76ee95a31..485413cb6b20c4bd20fbc29a0db43c051993fe79 100644
+index 61c526263cfbd1871f6b8548ed4431a76ee95a31..fbecf18d3dcf4c49d8f177248505101b0df454a9 100644
 --- a/io/papermc/paper/FeatureHooks.java
 +++ b/io/papermc/paper/FeatureHooks.java
 @@ -1,6 +1,9 @@
@@ -22281,7 +22294,7 @@ index 61c526263cfbd1871f6b8548ed4431a76ee95a31..485413cb6b20c4bd20fbc29a0db43c05
  import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
  import it.unimi.dsi.fastutil.longs.LongSet;
  import it.unimi.dsi.fastutil.longs.LongSets;
-@@ -32,13 +35,16 @@ public final class FeatureHooks {
+@@ -32,13 +35,22 @@ public final class FeatureHooks {
  
      // this includes non-accessible entities
      public static Iterable<Entity> getAllEntities(final net.minecraft.server.level.ServerLevel world) {
@@ -22293,13 +22306,19 @@ index 61c526263cfbd1871f6b8548ed4431a76ee95a31..485413cb6b20c4bd20fbc29a0db43c05
 +        ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.setUnloadDelay(ticks); // Paper - rewrite chunk system
      }
  
++    // Sugarcane start - split ticking and view-distance unload delays
++    public static void setPlayerChunkViewUnloadDelay(final long ticks) {
++        ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.setViewUnloadDelay(ticks);
++    }
++    // Sugarcane end - split ticking and view-distance unload delays
++
      public static void registerPaperCommands(final Map<Set<String>, PaperSubcommand> commands) {
 +        commands.put(Set.of("fixlight"), new FixLightCommand()); // Paper - rewrite chunk system
 +        commands.put(Set.of("debug", "chunkinfo", "holderinfo"), new ChunkDebugCommand());  // Paper - rewrite chunk system
      }
  
      public static LevelChunkSection createSection(final PalettedContainerFactory palettedContainerFactory, final Level level, final ChunkPos chunkPos, final int chunkSection) {
-@@ -59,111 +65,58 @@ public final class FeatureHooks {
+@@ -59,111 +71,58 @@ public final class FeatureHooks {
      }
  
      public static Set<Long> getSentChunkKeys(final ServerPlayer player) {
@@ -22432,7 +22451,7 @@ index 61c526263cfbd1871f6b8548ed4431a76ee95a31..485413cb6b20c4bd20fbc29a0db43c05
  
              org.bukkit.Chunk chunk = null;
              for (net.minecraft.server.level.Ticket ticket : tickets) {
-@@ -183,15 +136,15 @@ public final class FeatureHooks {
+@@ -183,15 +142,15 @@ public final class FeatureHooks {
      }
  
      public static int getViewDistance(net.minecraft.server.level.ServerLevel world) {
@@ -22451,7 +22470,7 @@ index 61c526263cfbd1871f6b8548ed4431a76ee95a31..485413cb6b20c4bd20fbc29a0db43c05
      }
  
      public static void setViewDistance(net.minecraft.server.level.ServerLevel world, int distance) {
-@@ -209,35 +162,31 @@ public final class FeatureHooks {
+@@ -209,35 +168,31 @@ public final class FeatureHooks {
      }
  
      public static void setSendViewDistance(net.minecraft.server.level.ServerLevel world, int distance) {
@@ -27040,7 +27059,7 @@ index 061bc47972d9c67375c0ff9461c506625c80108c..7656665352632fc718bea91dcfd3dd41
      }
  
 diff --git a/net/minecraft/server/level/ServerPlayer.java b/net/minecraft/server/level/ServerPlayer.java
-index b1f60ef5e69c4f85eea5de42288d80fbda569ef6..1776f98636ca53a7cdbd160fbf6c22526fdb26a4 100644
+index 9a72004427ff4174303a36dba83c7b71748d138d..65f91abbfaf92718809ef37cacdc7bb70b93ca55 100644
 --- a/net/minecraft/server/level/ServerPlayer.java
 +++ b/net/minecraft/server/level/ServerPlayer.java
 @@ -201,7 +201,7 @@ import net.minecraft.world.scores.criteria.ObjectiveCriteria;
@@ -29122,7 +29141,7 @@ index 080fcef99f5407685181c2fb7bdb41b14481f6f7..f209696e0158df5cd32e9949b3054452
          this(setDirty, true, ImmutableList.of());
      }
 diff --git a/net/minecraft/world/entity/decoration/ArmorStand.java b/net/minecraft/world/entity/decoration/ArmorStand.java
-index 8a6dfb642c89264386ad9302a8bb190ce5e23a26..79ae039d1908830e81912d230b3540a4920e2017 100644
+index 6cf6870038af655319d7e821372fdac9b6de365f..7ef3bf6d4034bd5a4b8934d4df634bc1ef2c3707 100644
 --- a/net/minecraft/world/entity/decoration/ArmorStand.java
 +++ b/net/minecraft/world/entity/decoration/ArmorStand.java
 @@ -204,7 +204,7 @@ public class ArmorStand extends LivingEntity {
