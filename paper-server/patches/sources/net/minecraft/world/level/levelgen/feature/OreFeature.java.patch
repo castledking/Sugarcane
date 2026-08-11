@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/levelgen/feature/OreFeature.java
++++ b/net/minecraft/world/level/levelgen/feature/OreFeature.java
+@@ -69,7 +_,7 @@
+         final int sizeY
+     ) {
+         int placed = 0;
+-        BitSet tested = new BitSet(sizeXZ * sizeY * sizeXZ);
++        BitSet tested = io.papermc.paper.sugarcane.CachedBitSets.getCachedOrNew(sizeXZ * sizeY * sizeXZ); // Sugarcane - Leaf - C2ME - reduce worldgen allocations
+         BlockPos.MutableBlockPos orePos = new BlockPos.MutableBlockPos();
+         int size = config.size;
+         double[] data = new double[size * 4];
