@@ -32,6 +32,10 @@ Many of these mechanics are altered or limited in Paper for performance reasons.
 > **Why?** Vanilla-style mechanics can generate chunks rapidly under load, cause lag spikes during exploration, and increase disk and CPU usage if terrain is generated on-the-fly.
 > 
 > **Recommended setup:** Pre-generate your world using tools like Chunky or WorldBorder fill, then run Sugarcane for gameplay.
+> 
+> Exploration on ungenerated terrain is noticeably cheaper as of build 7 — see `delay-view-distance-unloads-by`
+> below — but generating terrain on demand is still the most expensive thing a server does, so pregeneration
+> remains the recommendation.
 
 ---
 
@@ -48,6 +52,7 @@ Sugarcane restores or improves the following behaviors:
 - **Removes chunk load rate limits** → ensures fast chunk processing
 - **Restores cross-chunk interactions** → hoppers, fluids, and double containers work across chunk boundaries
 - **Prevents premature chunk unloads** → tick tickets properly process without desynchronization in massive machines
+- **Separates ticking and view-distance unload delays** → exploration no longer thrashes chunks off and back onto disk, without extending how long machines tick
 
 ### 🚃 Entity & Redstone Reliability
 - **Increased activation range** → minecarts and misc entities now activate properly over longer distances
@@ -60,6 +65,87 @@ Sugarcane restores or improves the following behaviors:
 ### 🛠️ Automation & Crafting
 - **Raises recipe spam limits**
 - **Relaxes packet limits** → crafting automation systems no longer cause kicks or stalls
+
+---
+
+## 🧵 Forced Folia Mode
+
+Sugarcane can pretend to be a Folia build. This exists so plugin authors can develop against the Folia
+scheduler API on top of Sugarcane's vanilla patches, without running Folia itself and without Paper's
+main-thread scheduler quietly propping up code that would break on a real regionised server.
+
+### ⚙️ Configuration
+
+Located in `paper-global.yml`:
+
+```yaml
+sugarcane:
+  folia:
+    force-folia: false
+    strict-scheduler: true
+```
+
+### 🔍 Behavior
+
+With `force-folia: true`:
+
+- Plugins must declare `folia-supported: true` in `plugin.yml` or `paper-plugin.yml`. Anything that does
+  not is refused with the same message a real Folia server gives, before any of its code runs — including
+  its bootstrapper.
+- With `strict-scheduler: true` (the default), the legacy `BukkitScheduler` throws
+  `UnsupportedOperationException`, exactly as it does on Folia. Plugins must use
+  `Bukkit.getGlobalRegionScheduler()`, `Bukkit.getRegionScheduler()`, `Bukkit.getAsyncScheduler()`, or
+  `Entity#getScheduler()`.
+
+The setting is read before plugins load, so it needs a restart and is not affected by `/paper reload`.
+Both options default to off, so nothing changes unless you opt in.
+
+### ⚖️ What this is not
+
+Sugarcane is **not** regionised — it is still a single-threaded server. Forced Folia mode reproduces
+Folia's *plugin contract*, not its threading model. Code that passes here will not have been exercised
+against real concurrent region ticking, so it is a development aid, not a substitute for testing on Folia.
+Folia limitations that exist purely because of region threading (scoreboards, synchronous teleports) are
+deliberately left working, since Sugarcane can support them correctly.
+
+---
+
+## 🗺️ Exploration & Chunk Unloading
+
+Paper ships a single `delay-chunk-unloads-by` setting that does two unrelated jobs: it keeps a chunk
+**ticking** after it leaves simulation distance, and it keeps a chunk **loaded** after it leaves view
+distance. Sugarcane wants opposite things from those two, so it splits them.
+
+Holding a chunk at its ticking level is what makes machines run longer than vanilla, so Sugarcane keeps
+that at `0s`. But dropping a chunk the instant it leaves view distance is what makes exploration expensive:
+walk forward and the chunks behind you are written out and unloaded, turn around and they are read back off
+disk. A loaded-but-not-ticking chunk costs memory and nothing else, so holding those is free correctness-wise.
+
+### ⚙️ Configuration
+
+Located in `paper-world-defaults.yml` (or per-world config):
+
+```yaml
+chunks:
+  # Keeps chunks TICKING after leaving simulation distance.
+  # 0s = vanilla parity; machines stop exactly when vanilla stops them.
+  delay-chunk-unloads-by: 0s
+  # Keeps chunks LOADED (not ticking) after leaving view distance.
+  # Absorbs the unload/reload churn of exploring fresh terrain.
+  delay-view-distance-unloads-by: 10s
+```
+
+### ⚖️ Tradeoffs
+
+- ✅ Exploration stops re-reading chunks you just walked away from
+- ✅ Machine ticking behaviour is unchanged — the ticking delay is still `0s`
+- ⚠️ Costs memory proportional to how fast players move through new terrain
+- Set `delay-view-distance-unloads-by: 0s` to get the previous build's behaviour back
+
+Build 7 also ports several allocation and serialization optimizations from
+[Leaf](https://github.com/Winds-Studio/Leaf) that sit directly on the exploration path: bulk long-array
+writes when serializing chunk sections and light data, iterator-free surface rule evaluation, reuse of the
+ore-placement bit sets, and cheaper structure terrain-adaptation math.
 
 ---
 
