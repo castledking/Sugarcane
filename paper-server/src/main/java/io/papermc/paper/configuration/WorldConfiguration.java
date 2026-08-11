@@ -511,7 +511,21 @@ public class WorldConfiguration extends ConfigurationPart {
         public int maxAutoSaveChunksPerTick = 24;
         public int fixedChunkInhabitedTime = -1;
         public boolean preventMovingIntoUnloadedChunks = false;
+        @Comment(
+            "How long a chunk is kept at its ticking level after leaving a player's simulation distance. " +
+            "Sugarcane defaults this to 0s so machines stop ticking exactly when vanilla stops ticking them; " +
+            "raising it lets contraptions keep running after the player walks away. To stop chunks churning " +
+            "during exploration, raise delay-view-distance-unloads-by instead - that one does not affect ticking."
+        )
         public Duration delayChunkUnloadsBy = Duration.of("0s");
+        @Comment(
+            "How long a chunk is kept loaded (but not ticking) after leaving a player's view distance. " +
+            "Without this, walking through freshly generated terrain unloads chunks the moment they leave " +
+            "view distance and re-reads them from disk the moment you turn around, which is the main source " +
+            "of exploration lag on non-pregenerated worlds. Chunks held by this setting do not tick, so " +
+            "unlike delay-chunk-unloads-by it does not change how long machines run. Set to 0s to disable."
+        )
+        public Duration delayViewDistanceUnloadsBy = Duration.of("10s");
         public Reference2IntMap<EntityType<?>> entityPerChunkSaveLimit = Util.make(new Reference2IntOpenHashMap<>(BuiltInRegistries.ENTITY_TYPE.size()), map -> {
             map.defaultReturnValue(-1);
             map.put(EntityType.EXPERIENCE_ORB, -1);
@@ -526,6 +540,7 @@ public class WorldConfiguration extends ConfigurationPart {
         @PostProcess
         private void postProcess() {
             FeatureHooks.setPlayerChunkUnloadDelay(this.delayChunkUnloadsBy.ticks());
+            FeatureHooks.setPlayerChunkViewUnloadDelay(this.delayViewDistanceUnloadsBy.ticks()); // Sugarcane - split the unload delay
         }
     }
 

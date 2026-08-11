@@ -394,4 +394,30 @@ public class GlobalConfiguration extends ConfigurationPart {
     public class UpdateChecker extends ConfigurationPart {
         public boolean enabled = true;
     }
+
+    public Sugarcane sugarcane;
+
+    public class Sugarcane extends ConfigurationPart {
+
+        public Folia folia;
+
+        public class Folia extends ConfigurationPart {
+            @Comment(
+                "Emulate a Folia server. Plugins must declare 'folia-supported: true' in their plugin.yml or " +
+                "paper-plugin.yml, and the server refuses to load them if they do not - exactly like a real Folia " +
+                "build. This lets you develop and test Folia-ready plugins against Sugarcane's vanilla patches " +
+                "without running Folia itself. Requires a restart; this option is read before plugins are loaded, " +
+                "so it is not affected by /paper reload."
+            )
+            public boolean forceFolia = false;
+
+            @Comment(
+                "When force-folia is enabled, also make the legacy BukkitScheduler throw " +
+                "UnsupportedOperationException, as Folia does. This surfaces main-thread scheduler usage at " +
+                "development time instead of letting it silently work. Disable to keep the legacy scheduler " +
+                "usable while still enforcing the plugin flag. Has no effect unless force-folia is enabled."
+            )
+            public boolean strictScheduler = true;
+        }
+    }
 }
