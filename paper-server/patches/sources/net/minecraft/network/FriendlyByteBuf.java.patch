@@ -1,15 +1,12 @@
 --- a/net/minecraft/network/FriendlyByteBuf.java
 +++ b/net/minecraft/network/FriendlyByteBuf.java
-@@ -70,14 +_,20 @@
+@@ -56,11 +_,17 @@
  
  public class FriendlyByteBuf extends ByteBuf {
      private final ByteBuf source;
 +    public final java.util.@Nullable Locale adventure$locale; // Paper - track player's locale for server-side translations
      public static final short MAX_STRING_LENGTH = 32767;
      public static final int MAX_COMPONENT_STRING_LENGTH = 262144;
-     private static final int PUBLIC_KEY_SIZE = 256;
-     private static final int MAX_PUBLIC_KEY_HEADER_SIZE = 256;
-     private static final int MAX_PUBLIC_KEY_LENGTH = 512;
      private static final Gson GSON = new Gson();
 +    // Paper start - Track codec depth
 +    public boolean trackCodecDepth;
@@ -21,7 +18,7 @@
          this.source = source;
      }
  
-@@ -106,8 +_,13 @@
+@@ -89,8 +_,13 @@
      }
  
      public <T> void writeJsonWithCodec(final Codec<T> codec, final T value) {
@@ -35,52 +32,8 @@
 +        this.writeUtf(GSON.toJson(result.getOrThrow(error -> new EncoderException("Failed to encode: " + error + " " + value))), maxLength); // Paper - Adventure; add max length parameter
      }
  
-     public static <T> IntFunction<T> limitValue(final IntFunction<T> original, final int limit) {
-@@ -350,11 +_,41 @@
-         return this;
-     }
- 
-+    // Sugarcane start - Leaf - bulk writes to writeLongArray during chunk loading
-+    // Chunk sections and light data are serialised as long arrays, so exploration turns this into one of
-+    // the hottest loops on the network path. Copy the whole array in one go where the destination buffer
-+    // allows it instead of paying per-element bounds and index bookkeeping.
-     public static void writeFixedSizeLongArray(final ByteBuf output, final long[] longs) {
--        for (long l : longs) {
--            output.writeLong(l);
-+        if (longs.length == 0) {
-+            return;
-+        }
-+
-+        final int neededBytes = longs.length * Long.BYTES;
-+        if (output.maxWritableBytes() < neededBytes) {
-+            // Cannot fit even at max capacity - fall back to the element-wise path, which grows the buffer.
-+            for (long l : longs) {
-+                output.writeLong(l);
-+            }
-+            return;
-+        }
-+
-+        output.ensureWritable(neededBytes);
-+        final int writerIndex = output.writerIndex();
-+
-+        if (output.hasArray()) {
-+            final ByteBuffer buf = ByteBuffer.wrap(output.array(), output.arrayOffset() + writerIndex, neededBytes).order(output.order());
-+            buf.asLongBuffer().put(longs);
-+            output.writerIndex(writerIndex + neededBytes);
-+        } else if (output.nioBufferCount() > 0) {
-+            output.nioBuffer(writerIndex, neededBytes).asLongBuffer().put(longs);
-+            output.writerIndex(writerIndex + neededBytes);
-+        } else {
-+            final ByteBuffer temp = ByteBuffer.allocate(neededBytes).order(output.order());
-+            temp.asLongBuffer().put(longs);
-+            output.writeBytes(temp);
-         }
-     }
-+    // Sugarcane end - Leaf - bulk writes to writeLongArray during chunk loading
- 
-     public long[] readLongArray() {
-         return readLongArray(this);
-@@ -530,7 +_,7 @@
+     public void readWithCount(final Consumer<FriendlyByteBuf> reader) {
+@@ -437,7 +_,7 @@
  
          try {
              NbtIo.writeAnyTag(tag, new ByteBufOutputStream(output));
