@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/entity/projectile/ProjectileUtil.java
 +++ b/net/minecraft/world/entity/projectile/ProjectileUtil.java
-@@ -221,12 +_,14 @@
+@@ -234,12 +_,14 @@
                      if (!outsideHit.isEmpty()) {
                          Vec3 outsideHitPosition = outsideHit.get();
                          Vec3 towardsTarget = entityBB.getCenter();
