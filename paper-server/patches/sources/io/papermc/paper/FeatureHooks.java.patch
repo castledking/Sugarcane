@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/io/papermc/paper/FeatureHooks.java
-@@ -1,0 +_,258 @@
+@@ -1,0 +_,251 @@
 +package io.papermc.paper;
 +
 +import io.papermc.paper.command.PaperSubcommand;
@@ -39,13 +39,6 @@
 +
 +    public static void setPlayerChunkUnloadDelay(final long ticks) {
 +    }
-+
-+    // Sugarcane start - split ticking and view-distance unload delays
-+    // No-op while Paper's 26.3 feature patches are unapplied. When Moonrise comes back, its FeatureHooks hunk
-+    // must fill in this body instead of declaring the method a second time.
-+    public static void setPlayerChunkViewUnloadDelay(final long ticks) {
-+    }
-+    // Sugarcane end - split ticking and view-distance unload delays
 +
 +    public static void registerPaperCommands(final Map<Set<String>, PaperSubcommand> commands) {
 +    }
