@@ -66,6 +66,12 @@ Sugarcane restores or improves the following behaviors:
 - **Raises recipe spam limits**
 - **Relaxes packet limits** → crafting automation systems no longer cause kicks or stalls
 
+### 🔌 Plugin Compatibility
+- **Classic version string** → `Bukkit.getBukkitVersion()` reports `26.2-R0.1-SNAPSHOT` rather than Paper
+  26.x's `26.2.build.9-stable`, so plugins that read it the way they always have find a Minecraft version
+  instead of a build string. The build number and channel are unchanged in `/version`, `ServerBuildInfo`
+  and the jar manifest.
+
 ---
 
 ## 🧵 Forced Folia Mode
