@@ -62,6 +62,10 @@ Sugarcane restores or improves the following behaviors:
 - **Improves per-player mob spawning** → provides granular control over mobcap influence radius
 - **Restores global mob cap behavior** → global mob switches work again
 
+### 🧑‍🌾 Villagers
+- **Fixes villager POI searches** → restores vanilla's 48 block search range, and makes the searches cheaper
+- **Purpur's villager options** → lobotomize stuck villagers, configurable search radius, iron golem limit
+
 ### 🛠️ Automation & Crafting
 - **Raises recipe spam limits**
 - **Relaxes packet limits** → crafting automation systems no longer cause kicks or stalls
@@ -151,7 +155,7 @@ chunks:
 Build 7 also ports several allocation and serialization optimizations from
 [Leaf](https://github.com/Winds-Studio/Leaf) that sit directly on the exploration path: bulk long-array
 writes when serializing chunk sections and light data, iterator-free surface rule evaluation, reuse of the
-ore-placement bit sets, and cheaper structure terrain-adaptation math.
+ore-placement bit sets, and cheaper structure terrain-adaptation math (Paper now ships that last one itself).
 
 ---
 
@@ -229,6 +233,69 @@ This keeps it:
 clearly optional
 framed as a Sugarcane-specific feature
 aligned with your “vanilla-first” philosophy without contradicting it
+
+---
+
+## 🧑‍🌾 Villager Performance
+
+On servers with big trading halls, breeders and iron golem farms, most of the villager brain's time goes on
+villagers searching for a bed, job site or bell they cannot claim. Sugarcane fixes the two upstream problems that
+made those searches expensive, and ports Purpur's villager options for servers that want to go further.
+
+### 🔧 Always on
+
+- **Vanilla POI search range** → since 26.1, Paper's villager POI search ignored vanilla's 48 block distance limit.
+  Villagers could pick beds and workstations far above or below them, and every search swept the whole world
+  height. Sugarcane restores the 48 block sphere.
+- **Faster POI searches** → POI searches track the chunk sections they have visited in a bitset instead of a hash
+  set. They visit sections in the same order, so results are identical.
+- **Behavior tick rates work again** → `tick-rates.behavior.villager.acquirepoi` and `validatenearbypoi` had no
+  effect, because those behaviors are no longer separate classes. They now throttle the behaviors as Paper
+  documents.
+
+### ⚙️ Configuration
+
+Located in paper-world-defaults.yml (or per-world config):
+
+```yaml
+sugarcane:
+  villagers:
+    lobotomize:
+      enabled: false
+      check-interval: 100
+      wait-until-trade-locked: true
+    search-radius:
+      acquire-poi: 48
+      nearest-bed-sensor: 48
+    spawn-iron-golem:
+      radius: 0
+      limit: 0
+```
+
+- **`lobotomize`** (from Purpur) → villagers that cannot walk to any neighbouring block stop running their AI.
+  They still trade, level up and restock. With `wait-until-trade-locked`, only villagers that have been traded with
+  are affected, so villagers you are still re-rolling and iron golem farm villagers keep working.
+- **`search-radius`** (from Purpur) → how far villagers look for beds, job sites and bells (`acquire-poi`), and how
+  far baby villagers look for beds (`nearest-bed-sensor`).
+- **`spawn-iron-golem`** (from Purpur) → when `radius` is above 0, villagers stop summoning iron golems while more
+  than `limit` golems are within `radius` blocks.
+
+Paper's own throttle now works for these behaviors too:
+
+```yaml
+tick-rates:
+  behavior:
+    villager:
+      acquirepoi: 120 # look for an unclaimed bed, job site or bell at most every 6 seconds
+```
+
+### ⚖️ Tradeoffs
+
+- ✅ The always-on changes match vanilla behavior
+- ⚠️ Lobotomized villagers do not sleep, panic, gossip or breed, so keep `wait-until-trade-locked` on if any iron
+  golem farm has villagers that cannot move
+- ⚠️ A slower `acquirepoi` tick rate means villagers take longer to claim new beds and workstations, and a
+  smaller `acquire-poi` radius means they ignore ones further away
 
 ## 🚀 When to Use Sugarcane
 
