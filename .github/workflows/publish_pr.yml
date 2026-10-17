@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   publish:
+    if: github.repository == 'PaperMC/Paper' # Sugarcane - Paper's runners and PR publishing only exist on PaperMC/Paper
     runs-on: namespace-profile-linux-small
     steps:
       - name: Generate an Application repository access token
