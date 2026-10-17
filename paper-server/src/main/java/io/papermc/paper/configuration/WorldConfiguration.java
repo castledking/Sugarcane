@@ -632,5 +632,40 @@ public class WorldConfiguration extends ConfigurationPart {
             // Off by default: enabling it also lets spears/arrows hit players through solid blocks.
             public boolean allowSurfaceHitsThroughBlocks = false;
         }
+
+        public Villagers villagers;
+
+        public class Villagers extends ConfigurationPart {
+            public Lobotomize lobotomize;
+
+            // Purpur - Lobotomize stuck villagers
+            public class Lobotomize extends ConfigurationPart {
+                @Comment("Stop ticking the AI of villagers that cannot walk to any neighbouring block, such as villagers in 1x1 trading cells. Lobotomized villagers still trade, level up and restock, but no longer sleep, panic, gossip, breed or pick up items.")
+                public boolean enabled = false;
+                @Comment("How often, in ticks, to check whether a villager is stuck. Villagers that were free on the last 3 checks are checked half as often.")
+                public int checkInterval = 100;
+                @Comment("Only lobotomize villagers that have been traded with, which locks their profession. Villagers you are still re-rolling, and iron golem farm villagers, keep their AI.")
+                public boolean waitUntilTradeLocked = true;
+            }
+
+            public SearchRadius searchRadius;
+
+            // Purpur - Configurable villager search radius
+            public class SearchRadius extends ConfigurationPart {
+                @Comment("Radius, in blocks, within which villagers look for an unclaimed bed, job site or bell. Vanilla is 48. Smaller values make each search cheaper, and stop villagers repeatedly pathfinding to far-away POIs they cannot reach.")
+                public int acquirePoi = 48;
+                @Comment("Radius, in blocks, within which baby villagers look for the nearest bed. Vanilla is 48.")
+                public int nearestBedSensor = 48;
+            }
+
+            public SpawnIronGolem spawnIronGolem;
+
+            // Purpur - Implement configurable search radius for villagers to spawn iron golems
+            public class SpawnIronGolem extends ConfigurationPart {
+                @Comment("If above 0, villagers do not summon an iron golem while more than 'limit' iron golems are within this many blocks of them.")
+                public int radius = 0;
+                public int limit = 0;
+            }
+        }
     }
 }

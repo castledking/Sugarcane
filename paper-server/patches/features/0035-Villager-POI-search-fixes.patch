@@ -1,0 +1,145 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: castledking <thecastledking@gmail.com>
+Date: Fri, 16 Oct 2026 21:43:05 -0700
+Subject: [PATCH] Villager POI search fixes
+
+Make the AcquirePoi and baby bed sensor radius configurable, from Purpur.
+
+Replace the hash set Paper's POI searches used to track visited sections
+with a bitset over the search box. Sections are visited in the same order,
+so results are unchanged.
+
+diff --git a/io/papermc/paper/util/PoiAccess.java b/io/papermc/paper/util/PoiAccess.java
+index f39294b1f83c4022be5ced4da781103a1eee2daf..9a57b262852c74f00fb345389c98e3ca4b122242 100644
+--- a/io/papermc/paper/util/PoiAccess.java
++++ b/io/papermc/paper/util/PoiAccess.java
+@@ -5,8 +5,6 @@ import ca.spottedleaf.moonrise.common.util.WorldUtil;
+ import com.mojang.datafixers.util.Pair;
+ import it.unimi.dsi.fastutil.doubles.Double2ObjectMap;
+ import it.unimi.dsi.fastutil.doubles.Double2ObjectRBTreeMap;
+-import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
+-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+ import java.util.function.BiPredicate;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Holder;
+@@ -222,15 +220,11 @@ public final class PoiAccess {
+         final int centerX = sourcePosition.getX() >> 4;
+         final int centerY = Mth.clamp(sourcePosition.getY() >> 4, lowerY, upperY);
+         final int centerZ = sourcePosition.getZ() >> 4;
+-        final long centerKey = CoordinateUtils.getChunkSectionKey(centerX, centerY, centerZ);
+-
+-        final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
+-        final LongOpenHashSet seen = new LongOpenHashSet();
+-        seen.add(centerKey);
+-        queue.enqueue(centerKey);
++        final io.papermc.paper.sugarcane.PoiSearchQueue queue = new io.papermc.paper.sugarcane.PoiSearchQueue(lowerX, lowerY, lowerZ, upperX, upperY, upperZ); // Sugarcane - flat array search queue
++        queue.enqueue(centerX, centerY, centerZ); // Sugarcane - flat array search queue
+ 
+         while (!queue.isEmpty()) {
+-            final long key = queue.dequeueLong();
++            final long key = queue.dequeue(); // Sugarcane - flat array search queue
+             final int sectionX = CoordinateUtils.getChunkSectionX(key);
+             final int sectionY = CoordinateUtils.getChunkSectionY(key);
+             final int sectionZ = CoordinateUtils.getChunkSectionZ(key);
+@@ -254,26 +248,7 @@ public final class PoiAccess {
+             }
+ 
+             // queue all neighbours
+-            for (int dz = -1; dz <= 1; ++dz) {
+-                for (int dx = -1; dx <= 1; ++dx) {
+-                    for (int dy = -1; dy <= 1; ++dy) {
+-                        // -1 and 1 have the 1st bit set. so just add up the first bits, and it will tell us how many
+-                        // values are set. we only care about cardinal neighbours, so, we only care if one value is set
+-                        if ((dx & 1) + (dy & 1) + (dz & 1) != 1) {
+-                            continue;
+-                        }
+-
+-                        final int neighbourX = sectionX + dx;
+-                        final int neighbourY = sectionY + dy;
+-                        final int neighbourZ = sectionZ + dz;
+-
+-                        final long neighbourKey = CoordinateUtils.getChunkSectionKey(neighbourX, neighbourY, neighbourZ);
+-                        if (seen.add(neighbourKey)) {
+-                            queue.enqueue(neighbourKey);
+-                        }
+-                    }
+-                }
+-            }
++            queue.enqueueNeighbours(sectionX, sectionY, sectionZ); // Sugarcane - flat array search queue
+ 
+             final Optional<PoiSection> poiSectionOptional = load ? poiStorage.getOrLoad(key) : poiStorage.get(key);
+ 
+@@ -465,15 +440,11 @@ public final class PoiAccess {
+         final int centerX = sourcePosition.getX() >> 4;
+         final int centerY = Mth.clamp(sourcePosition.getY() >> 4, lowerY, upperY);
+         final int centerZ = sourcePosition.getZ() >> 4;
+-        final long centerKey = CoordinateUtils.getChunkSectionKey(centerX, centerY, centerZ);
+-
+-        final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
+-        final LongOpenHashSet seen = new LongOpenHashSet();
+-        seen.add(centerKey);
+-        queue.enqueue(centerKey);
++        final io.papermc.paper.sugarcane.PoiSearchQueue queue = new io.papermc.paper.sugarcane.PoiSearchQueue(lowerX, lowerY, lowerZ, upperX, upperY, upperZ); // Sugarcane - flat array search queue
++        queue.enqueue(centerX, centerY, centerZ); // Sugarcane - flat array search queue
+ 
+         while (!queue.isEmpty()) {
+-            final long key = queue.dequeueLong();
++            final long key = queue.dequeue(); // Sugarcane - flat array search queue
+             final int sectionX = CoordinateUtils.getChunkSectionX(key);
+             final int sectionY = CoordinateUtils.getChunkSectionY(key);
+             final int sectionZ = CoordinateUtils.getChunkSectionZ(key);
+@@ -498,26 +469,7 @@ public final class PoiAccess {
+             }
+ 
+             // queue all neighbours
+-            for (int dz = -1; dz <= 1; ++dz) {
+-                for (int dx = -1; dx <= 1; ++dx) {
+-                    for (int dy = -1; dy <= 1; ++dy) {
+-                        // -1 and 1 have the 1st bit set. so just add up the first bits, and it will tell us how many
+-                        // values are set. we only care about cardinal neighbours, so, we only care if one value is set
+-                        if ((dx & 1) + (dy & 1) + (dz & 1) != 1) {
+-                            continue;
+-                        }
+-
+-                        final int neighbourX = sectionX + dx;
+-                        final int neighbourY = sectionY + dy;
+-                        final int neighbourZ = sectionZ + dz;
+-
+-                        final long neighbourKey = CoordinateUtils.getChunkSectionKey(neighbourX, neighbourY, neighbourZ);
+-                        if (seen.add(neighbourKey)) {
+-                            queue.enqueue(neighbourKey);
+-                        }
+-                    }
+-                }
+-            }
++            queue.enqueueNeighbours(sectionX, sectionY, sectionZ); // Sugarcane - flat array search queue
+ 
+             final Optional<PoiSection> poiSectionOptional = load ? poiStorage.getOrLoad(key) : poiStorage.get(key);
+ 
+diff --git a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
+index 51f29aad003cdf9efcd4c343e4c19f076ea8c758..e30b2153f8860b9c1c8cc9b29799b3c2a62d19f6 100644
+--- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
++++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
+@@ -85,7 +85,8 @@ public class AcquirePoi {
+                             };
+                             // Paper start - optimise POI access
+                             final java.util.List<Pair<Holder<PoiType>, BlockPos>> poiposes = new java.util.ArrayList<>();
+-                            io.papermc.paper.util.PoiAccess.findNearestPoiPositions(poiManager, acquirablePois, predicate1, mob.blockPosition(), 48, 48*48, PoiManager.Occupancy.HAS_SPACE, false, 5, poiposes);
++                            final int scanRange = level.paperConfig().sugarcane.villagers.searchRadius.acquirePoi; // Sugarcane - Purpur - Configurable villager search radius
++                            io.papermc.paper.util.PoiAccess.findNearestPoiPositions(poiManager, acquirablePois, predicate1, mob.blockPosition(), scanRange, (double)((long)scanRange * (long)scanRange), PoiManager.Occupancy.HAS_SPACE, false, 5, poiposes); // Sugarcane - Purpur - Configurable villager search radius
+                             final Set<Pair<Holder<PoiType>, BlockPos>> set = new java.util.HashSet<>(poiposes.size());
+                             for (final Pair<Holder<PoiType>, BlockPos> poiPose : poiposes) {
+                                 if (predicate.test(level, poiPose.getSecond())) {
+diff --git a/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java b/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
+index 066faa704338c573472381e1ebd063e0d52aaaa4..64bddd37042e3dacf2c08eafe36d5049458a9075 100644
+--- a/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
++++ b/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
+@@ -56,7 +56,7 @@ public class NearestBedSensor extends Sensor<Mob> {
+             // Paper start - optimise POI access
+             java.util.List<Pair<Holder<PoiType>, BlockPos>> poiposes = new java.util.ArrayList<>();
+             // don't ask me why it's unbounded. ask mojang.
+-            io.papermc.paper.util.PoiAccess.findAnyPoiPositions(poiManager, type -> type.is(PoiTypes.HOME), predicate, entity.blockPosition(), 48, PoiManager.Occupancy.ANY, false, Integer.MAX_VALUE, poiposes);
++            io.papermc.paper.util.PoiAccess.findAnyPoiPositions(poiManager, type -> type.is(PoiTypes.HOME), predicate, entity.blockPosition(), level.paperConfig().sugarcane.villagers.searchRadius.nearestBedSensor, PoiManager.Occupancy.ANY, false, Integer.MAX_VALUE, poiposes); // Sugarcane - Purpur - Configurable villager search radius
+             Path path = AcquirePoi.findPathToPois(entity, new java.util.HashSet<>(poiposes));
+             // Paper end - optimise POI access
+             if (path != null && path.canReach()) {
