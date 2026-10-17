@@ -1,0 +1,91 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: castledking <thecastledking@gmail.com>
+Date: Fri, 16 Oct 2026 17:15:22 -0700
+Subject: [PATCH] Apply behavior tick rates to declarative behaviors
+
+tick-rates.behavior matches behaviors by their class name, which only works
+for Behavior subclasses. AcquirePoi and ValidateNearbyPoi are now built with
+BehaviorBuilder, so they are anonymous OneShot classes and the
+villager acquirepoi and validatenearbypoi keys silently did nothing. Let
+OneShot factories register the key their old class used.
+
+diff --git a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
+index 2940dbc31a20eb49e24418ec84b73f2bfbdcfc32..0766a332301ef8823574f8bc548af51957170dd0 100644
+--- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
++++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
+@@ -124,9 +124,12 @@ public class AcquirePoi {
+                     }
+                 )
+         );
+-        return memoryToAcquire == memoryToValidate
++        // Sugarcane start - configurable tick rate for declarative behaviors
++        OneShot<PathfinderMob> behavior = memoryToAcquire == memoryToValidate
+             ? acquirePoi
+             : BehaviorBuilder.create(i -> i.group(i.absent(memoryToValidate)).apply(i, toValidate -> acquirePoi));
++        return behavior.withTickRateKey("acquirepoi");
++        // Sugarcane end - configurable tick rate for declarative behaviors
+     }
+ 
+     public static @Nullable Path findPathToPois(final Mob body, final Set<Pair<Holder<PoiType>, BlockPos>> pois) {
+diff --git a/net/minecraft/world/entity/ai/behavior/OneShot.java b/net/minecraft/world/entity/ai/behavior/OneShot.java
+index d7b97e35e1aa5264f191048cb448d18d28f75ea8..868ac153f7dc2ead515fdf6cc733ba8a792dbec2 100644
+--- a/net/minecraft/world/entity/ai/behavior/OneShot.java
++++ b/net/minecraft/world/entity/ai/behavior/OneShot.java
+@@ -6,6 +6,17 @@ import net.minecraft.world.entity.ai.behavior.declarative.Trigger;
+ 
+ public abstract class OneShot<E extends LivingEntity> implements BehaviorControl<E>, Trigger<E> {
+     private Behavior.Status status = Behavior.Status.STOPPED;
++    // Sugarcane start - configurable tick rate for declarative behaviors
++    // Behaviors built by BehaviorBuilder are anonymous classes, so tick-rates.behavior has no class name to match
++    // them by the way Behavior does. Factories opt in under the key their old Behavior subclass used.
++    private @org.jspecify.annotations.Nullable String tickRateKey;
++    private long lastTriggered;
++
++    public final OneShot<E> withTickRateKey(final String tickRateKey) {
++        this.tickRateKey = tickRateKey;
++        return this;
++    }
++    // Sugarcane end - configurable tick rate for declarative behaviors
+ 
+     @Override
+     public final Behavior.Status getStatus() {
+@@ -14,8 +25,17 @@ public abstract class OneShot<E extends LivingEntity> implements BehaviorControl
+ 
+     @Override
+     public final boolean tryStart(final ServerLevel level, final E body, final long timestamp) {
++        // Sugarcane start - configurable tick rate for declarative behaviors
++        if (this.tickRateKey != null) {
++            int tickRate = java.util.Objects.requireNonNullElse(level.paperConfig().tickRates.behavior.get(body.getType(), this.tickRateKey), -1);
++            if (tickRate > -1 && timestamp < this.lastTriggered + tickRate) {
++                return false;
++            }
++        }
++        // Sugarcane end - configurable tick rate for declarative behaviors
+         if (this.trigger(level, body, timestamp)) {
+             this.status = Behavior.Status.RUNNING;
++            this.lastTriggered = timestamp; // Sugarcane - configurable tick rate for declarative behaviors
+             return true;
+         } else {
+             return false;
+diff --git a/net/minecraft/world/entity/ai/behavior/ValidateNearbyPoi.java b/net/minecraft/world/entity/ai/behavior/ValidateNearbyPoi.java
+index bd4fab6ad4404a758c7dbb690c32390038c8fb32..09e23824164badaed4e9069d00c25243a6200633 100644
+--- a/net/minecraft/world/entity/ai/behavior/ValidateNearbyPoi.java
++++ b/net/minecraft/world/entity/ai/behavior/ValidateNearbyPoi.java
+@@ -20,7 +20,7 @@ public class ValidateNearbyPoi {
+     private static final int MAX_DISTANCE = 16;
+ 
+     public static BehaviorControl<LivingEntity> create(final Predicate<Holder<PoiType>> poiType, final MemoryModuleType<GlobalPos> memoryType) {
+-        return BehaviorBuilder.create(i -> i.group(i.present(memoryType)).apply(i, memory -> (level, body, timestamp) -> {
++        return BehaviorBuilder.<LivingEntity>create(i -> i.group(i.present(memoryType)).apply(i, memory -> (level, body, timestamp) -> { // Sugarcane - configurable tick rate for declarative behaviors
+             GlobalPos globalPos = i.get(memory);
+             BlockPos pos = globalPos.pos();
+             if (level.dimension() == globalPos.dimension() && pos.closerToCenterThan(body.position(), MAX_DISTANCE)) {
+@@ -39,7 +39,7 @@ public class ValidateNearbyPoi {
+             } else {
+                 return false;
+             }
+-        }));
++        })).withTickRateKey("validatenearbypoi"); // Sugarcane - configurable tick rate for declarative behaviors
+     }
+ 
+     private static boolean bedIsOccupied(final ServerLevel poiLevel, final BlockPos poiPos, final LivingEntity body) {
