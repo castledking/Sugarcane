@@ -1,0 +1,110 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: castledking <thecastledking@gmail.com>
+Date: Fri, 16 Oct 2026 17:15:23 -0700
+Subject: [PATCH] Purpur villager options
+
+Port Purpur's option to lobotomize villagers that cannot move, and its limit
+on iron golems summoned near villagers. The golem count is only taken once a
+villager actually wants to summon one.
+
+diff --git a/net/minecraft/world/entity/npc/villager/Villager.java b/net/minecraft/world/entity/npc/villager/Villager.java
+index e6f3961f1573dffef51b8ee724a52800c8a6004b..696e95c9f8b7945e2a2eb0ebb4e7d1109bac2121 100644
+--- a/net/minecraft/world/entity/npc/villager/Villager.java
++++ b/net/minecraft/world/entity/npc/villager/Villager.java
+@@ -187,6 +187,57 @@ public class Villager extends AbstractVillager implements VillagerDataHolder, Re
+         this.setCanPickUpLoot(true);
+     }
+ 
++    // Sugarcane start - Purpur - Lobotomize stuck villagers
++    private boolean lobotomized;
++    private int notLobotomizedCount;
++
++    public boolean isLobotomized() {
++        return this.lobotomized;
++    }
++
++    private boolean checkLobotomized(final ServerLevel level) {
++        final io.papermc.paper.configuration.WorldConfiguration.Sugarcane.Villagers.Lobotomize config = level.paperConfig().sugarcane.villagers.lobotomize;
++        int interval = Math.max(1, config.checkInterval);
++        if (this.notLobotomizedCount > 3) {
++            // check half as often if not lobotomized for the last 3+ consecutive checks
++            interval *= 2;
++        }
++        if (level.getGameTime() % interval == 0) {
++            // offset Y for short blocks like dirt_path/farmland
++            this.lobotomized = !(config.waitUntilTradeLocked && this.getVillagerXp() == 0)
++                && !this.canTravelFrom(level, net.minecraft.core.BlockPos.containing(this.position().x, this.getBoundingBox().minY + 0.0625D, this.position().z));
++            if (this.lobotomized) {
++                this.notLobotomizedCount = 0;
++            } else {
++                this.notLobotomizedCount++;
++            }
++        }
++        return this.lobotomized;
++    }
++
++    private boolean canTravelFrom(final ServerLevel level, final net.minecraft.core.BlockPos pos) {
++        return this.canTravelTo(level, pos.east()) || this.canTravelTo(level, pos.west()) || this.canTravelTo(level, pos.north()) || this.canTravelTo(level, pos.south());
++    }
++
++    private boolean canTravelTo(final ServerLevel level, final net.minecraft.core.BlockPos pos) {
++        net.minecraft.world.level.block.state.BlockState state = level.getBlockStateIfLoaded(pos);
++        if (state == null) {
++            // chunk not loaded
++            return false;
++        }
++        net.minecraft.world.level.block.Block bottom = state.getBlock();
++        if (bottom instanceof net.minecraft.world.level.block.FenceBlock
++            || bottom instanceof net.minecraft.world.level.block.FenceGateBlock
++            || bottom instanceof net.minecraft.world.level.block.WallBlock) {
++            // bottom block is too tall to get over
++            return false;
++        }
++        net.minecraft.world.level.block.Block top = level.getBlockState(pos.above()).getBlock();
++        // only if both blocks have no collision
++        return !bottom.hasCollision && !top.hasCollision;
++    }
++    // Sugarcane end - Purpur - Lobotomize stuck villagers
++
+     @Override
+     public Brain<Villager> getBrain() {
+         return (Brain<Villager>)super.getBrain();
+@@ -252,11 +303,23 @@ public class Villager extends AbstractVillager implements VillagerDataHolder, Re
+         // Paper start - EAR 2
+         this.customServerAiStep(level, false);
+     }
+-    protected void customServerAiStep(ServerLevel level, final boolean inactive) {
++    protected void customServerAiStep(ServerLevel level, boolean inactive) { // Sugarcane - Purpur - Lobotomize stuck villagers
+         // Paper end - EAR 2
+         ProfilerFiller profiler = Profiler.get();
+         profiler.push("villagerBrain");
+-        if (!inactive) this.getBrain().tick(level, this); // Paper - EAR 2
++        // Sugarcane start - Purpur - Lobotomize stuck villagers
++        if (level.paperConfig().sugarcane.villagers.lobotomize.enabled) {
++            // treat as inactive if lobotomized
++            inactive = inactive || this.checkLobotomized(level);
++        } else {
++            this.lobotomized = false;
++        }
++        if (!inactive) {
++            this.getBrain().tick(level, this); // Paper - EAR 2
++        } else if (this.lobotomized && this.shouldRestock(level)) {
++            this.restock();
++        }
++        // Sugarcane end - Purpur - Lobotomize stuck villagers
+         profiler.pop();
+         if (this.lastTradedPlayer != null) {
+             level.onReputationEvent(ReputationEventType.TRADE, this.lastTradedPlayer, this);
+@@ -897,6 +960,12 @@ public class Villager extends AbstractVillager implements VillagerDataHolder, Re
+ 
+     public void spawnGolemIfNeeded(final ServerLevel level, final long timestamp, final int villagersNeededToAgree) {
+         if (this.wantsToSpawnGolem(timestamp)) {
++            // Sugarcane start - Purpur - Implement configurable search radius for villagers to spawn iron golems
++            final io.papermc.paper.configuration.WorldConfiguration.Sugarcane.Villagers.SpawnIronGolem golemLimit = level.paperConfig().sugarcane.villagers.spawnIronGolem;
++            if (golemLimit.radius > 0 && level.getEntitiesOfClass(net.minecraft.world.entity.animal.golem.IronGolem.class, this.getBoundingBox().inflate(golemLimit.radius)).size() > golemLimit.limit) {
++                return;
++            }
++            // Sugarcane end - Purpur - Implement configurable search radius for villagers to spawn iron golems
+             AABB villagerSearchBox = this.getBoundingBox().inflate(10.0, 10.0, 10.0);
+             List<Villager> nearbyVillagers = level.getEntitiesOfClass(Villager.class, villagerSearchBox);
+             List<Villager> nearbyVillagersThatWantAGolem = nearbyVillagers.stream()
