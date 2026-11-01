@@ -5,10 +5,10 @@ Subject: [PATCH] Anti-Xray
 
 
 diff --git a/io/papermc/paper/FeatureHooks.java b/io/papermc/paper/FeatureHooks.java
-index 7a04214fcb23ca8cbf9ef7d50cfb28584ac4dc5f..fa322df502d1e6c6d603730372c572f62e70306a 100644
+index 0c9d08fefe233ec5f4bdf4d15844e19550ecd990..70d98ce61855f217b0001e6842a688d300689311 100644
 --- a/io/papermc/paper/FeatureHooks.java
 +++ b/io/papermc/paper/FeatureHooks.java
-@@ -47,20 +47,25 @@ public final class FeatureHooks {
+@@ -51,20 +51,25 @@ public final class FeatureHooks {
      }
  
      public static LevelChunkSection createSection(final PalettedContainerFactory palettedContainerFactory, final Level level, final ChunkPos chunkPos, final int chunkSection) {
