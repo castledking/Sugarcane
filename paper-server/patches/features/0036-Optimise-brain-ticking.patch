@@ -1,0 +1,334 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: castledking <thecastledking@gmail.com>
+Date: Sun, 1 Nov 2026 04:02:52 -0800
+Subject: [PATCH] Optimise brain ticking
+
+Brain#tick walked a TreeMap of HashMaps of LinkedHashSets to start
+behaviours, then walked it again to find the running ones, for every mob
+with a brain on every tick. With a thousand villagers that walk was about
+a quarter of the tick. Keep the same behaviours in arrays built from those
+maps, in exactly the order the walk visits them, and rebuild the arrays
+whenever the maps change.
+
+The active activities are still checked group by group while behaviours
+are started, so a behaviour that switches the brain to another activity
+part way through, like a villager starting to panic, is honoured exactly
+as before. Lithium's and Leaf's versions of this cache the active
+behaviours for the whole pass, which does not keep that.
+
+Sensors and memory slots are also ticked from arrays, memories are kept in
+an identity map, and GateBehavior walks its children by index.
+
+diff --git a/net/minecraft/world/entity/ai/Brain.java b/net/minecraft/world/entity/ai/Brain.java
+index 07a9f94438fd82830c5e53ecb86d4dd6d67631b0..f08e49187f29ba498d9d2e0aabded881b95d4430 100644
+--- a/net/minecraft/world/entity/ai/Brain.java
++++ b/net/minecraft/world/entity/ai/Brain.java
+@@ -37,7 +37,7 @@ import org.jspecify.annotations.Nullable;
+ 
+ public class Brain<E extends LivingEntity> {
+     private static final int SCHEDULE_UPDATE_DELAY = 20;
+-    private final Map<MemoryModuleType<?>, MemorySlot<?>> memories = Maps.newHashMap();
++    private final Map<MemoryModuleType<?>, MemorySlot<?>> memories = new it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap<>(); // Sugarcane - Optimise brain ticking - MemoryModuleType uses identity equality
+     private final Map<SensorType<? extends Sensor<? super E>>, Sensor<? super E>> sensors = Maps.newLinkedHashMap();
+     private final Map<Integer, Map<Activity, Set<BehaviorControl<? super E>>>> availableBehaviorsByPriority = Maps.newTreeMap();
+     private @Nullable EnvironmentAttribute<Activity> schedule;
+@@ -47,6 +47,71 @@ public class Brain<E extends LivingEntity> {
+     private final Set<Activity> activeActivities = Sets.newHashSet();
+     private Activity defaultActivity = Activity.IDLE;
+     private long lastScheduleUpdate = -9999L;
++    // Sugarcane start - Optimise brain ticking
++    // Vanilla walks a TreeMap of HashMaps of LinkedHashSets twice per tick. These arrays hold the same
++    // behaviours in exactly the order that walk visits them, and are rebuilt whenever the maps change.
++    private Activity @Nullable [] sugarcane$groupActivities;
++    private BehaviorControl<? super E> @Nullable [][] sugarcane$groupBehaviours;
++    private BehaviorControl<? super E> @Nullable [] sugarcane$allBehaviours;
++    private BehaviorControl<? super E> @Nullable [] sugarcane$runningScratch;
++    private Sensor<? super E> @Nullable [] sugarcane$sensors;
++    private MemorySlot<?> @Nullable [] sugarcane$memorySlots;
++
++    private void sugarcane$invalidateBehaviours() {
++        this.sugarcane$groupActivities = null;
++        this.sugarcane$groupBehaviours = null;
++        this.sugarcane$allBehaviours = null;
++    }
++
++    @SuppressWarnings("unchecked")
++    private void sugarcane$buildBehaviours() {
++        final List<Activity> activities = new ObjectArrayList<>();
++        final List<BehaviorControl<? super E>[]> groups = new ObjectArrayList<>();
++        final List<BehaviorControl<? super E>> all = new ObjectArrayList<>();
++        for (Map<Activity, Set<BehaviorControl<? super E>>> behavioursByActivities : this.availableBehaviorsByPriority.values()) {
++            for (Entry<Activity, Set<BehaviorControl<? super E>>> behavioursForActivity : behavioursByActivities.entrySet()) {
++                final BehaviorControl<? super E>[] behaviours = behavioursForActivity.getValue().toArray(new BehaviorControl[0]);
++                activities.add(behavioursForActivity.getKey());
++                groups.add(behaviours);
++                java.util.Collections.addAll(all, behaviours);
++            }
++        }
++        this.sugarcane$groupActivities = activities.toArray(new Activity[0]);
++        this.sugarcane$groupBehaviours = groups.toArray(new BehaviorControl[0][]);
++        this.sugarcane$allBehaviours = all.toArray(new BehaviorControl[0]);
++    }
++
++    // Like vanilla's getRunningBehaviors, the running behaviours are collected before any of them is ticked or
++    // stopped, in the same order. They go into a scratch array that is reused between ticks; a nested call made while
++    // the scratch is in use gets an array of its own.
++    @SuppressWarnings("unchecked")
++    private BehaviorControl<? super E>[] sugarcane$takeRunningScratch() {
++        if (this.sugarcane$allBehaviours == null) {
++            this.sugarcane$buildBehaviours();
++        }
++        BehaviorControl<? super E>[] scratch = this.sugarcane$runningScratch;
++        this.sugarcane$runningScratch = null;
++        if (scratch == null || scratch.length < this.sugarcane$allBehaviours.length) {
++            scratch = new BehaviorControl[this.sugarcane$allBehaviours.length];
++        }
++        return scratch;
++    }
++
++    private int sugarcane$collectRunning(final BehaviorControl<? super E>[] into) {
++        int count = 0;
++        for (final BehaviorControl<? super E> behavior : this.sugarcane$allBehaviours) {
++            if (behavior.getStatus() == Behavior.Status.RUNNING) {
++                into[count++] = behavior;
++            }
++        }
++        return count;
++    }
++
++    private void sugarcane$returnRunningScratch(final BehaviorControl<? super E>[] scratch, final int count) {
++        java.util.Arrays.fill(scratch, 0, count, null);
++        this.sugarcane$runningScratch = scratch;
++    }
++    // Sugarcane end - Optimise brain ticking
+ 
+     public static <E extends LivingEntity> Brain.Provider<E> provider(final Collection<? extends SensorType<? extends Sensor<? super E>>> sensorTypes) {
+         return new Brain.Provider<>(ImmutableList.of(), sensorTypes, var0 -> List.of());
+@@ -103,6 +168,7 @@ public class Brain<E extends LivingEntity> {
+ 
+     private void registerMemory(final MemoryModuleType<?> memoryType) {
+         this.memories.putIfAbsent(memoryType, MemorySlot.create());
++        this.sugarcane$memorySlots = null; // Sugarcane - Optimise brain ticking
+     }
+ 
+     public Brain() {
+@@ -266,19 +332,14 @@ public class Brain<E extends LivingEntity> {
+     @Deprecated
+     @VisibleForDebug
+     public List<BehaviorControl<? super E>> getRunningBehaviors() {
+-        List<BehaviorControl<? super E>> runningBehaviours = new ObjectArrayList<>();
+-
+-        for (Map<Activity, Set<BehaviorControl<? super E>>> behavioursByActivities : this.availableBehaviorsByPriority.values()) {
+-            for (Set<BehaviorControl<? super E>> behaviors : behavioursByActivities.values()) {
+-                for (BehaviorControl<? super E> behavior : behaviors) {
+-                    if (behavior.getStatus() == Behavior.Status.RUNNING) {
+-                        runningBehaviours.add(behavior);
+-                    }
+-                }
+-            }
++        // Sugarcane start - Optimise brain ticking
++        if (this.sugarcane$allBehaviours == null) {
++            this.sugarcane$buildBehaviours();
+         }
+-
+-        return runningBehaviours;
++        @SuppressWarnings("unchecked")
++        final BehaviorControl<? super E>[] running = new BehaviorControl[this.sugarcane$allBehaviours.length];
++        return ObjectArrayList.wrap(running, this.sugarcane$collectRunning(running));
++        // Sugarcane end - Optimise brain ticking
+     }
+ 
+     public void useDefaultActivity() {
+@@ -371,11 +432,13 @@ public class Brain<E extends LivingEntity> {
+                 .computeIfAbsent(activity, key -> Sets.newLinkedHashSet())
+                 .add(behavior);
+         }
++        this.sugarcane$invalidateBehaviours(); // Sugarcane - Optimise brain ticking
+     }
+ 
+     @VisibleForTesting
+     public void removeAllBehaviors() {
+         this.availableBehaviorsByPriority.clear();
++        this.sugarcane$invalidateBehaviours(); // Sugarcane - Optimise brain ticking
+     }
+ 
+     public boolean isActive(final Activity activity) {
+@@ -389,35 +452,64 @@ public class Brain<E extends LivingEntity> {
+         this.tickEachRunningBehavior(level, body);
+     }
+ 
++    @SuppressWarnings("unchecked") // Sugarcane - Optimise brain ticking
+     private void tickSensors(final ServerLevel level, final E body) {
+-        for (Sensor<? super E> sensor : this.sensors.values()) {
++        // Sugarcane start - Optimise brain ticking - sensors are only added by the constructor
++        Sensor<? super E>[] sensors = this.sugarcane$sensors;
++        if (sensors == null) {
++            sensors = this.sugarcane$sensors = this.sensors.values().toArray(new Sensor[0]);
++        }
++        for (Sensor<? super E> sensor : sensors) {
++            // Sugarcane end - Optimise brain ticking
+             sensor.tick(level, body);
+         }
+     }
+ 
+     private void forgetOutdatedMemories() {
+-        this.memories.values().forEach(MemorySlot::tick);
++        // Sugarcane start - Optimise brain ticking - every slot ticks on its own, so the order does not matter
++        MemorySlot<?>[] slots = this.sugarcane$memorySlots;
++        if (slots == null) {
++            slots = this.sugarcane$memorySlots = this.memories.values().toArray(new MemorySlot<?>[0]);
++        }
++        for (MemorySlot<?> slot : slots) {
++            slot.tick();
++        }
++        // Sugarcane end - Optimise brain ticking
+     }
+ 
+     public void stopAll(final ServerLevel level, final E body) {
+         long timestamp = body.level().getGameTime();
+ 
+-        for (BehaviorControl<? super E> behavior : this.getRunningBehaviors()) {
+-            behavior.doStop(level, body, timestamp);
++        // Sugarcane start - Optimise brain ticking
++        final BehaviorControl<? super E>[] running = this.sugarcane$takeRunningScratch();
++        final int count = this.sugarcane$collectRunning(running);
++        try {
++            for (int i = 0; i < count; i++) {
++                final BehaviorControl<? super E> behavior = running[i];
++                // Sugarcane end - Optimise brain ticking
++                behavior.doStop(level, body, timestamp);
++            }
++        } finally { // Sugarcane - Optimise brain ticking
++            this.sugarcane$returnRunningScratch(running, count); // Sugarcane - Optimise brain ticking
+         }
+     }
+ 
+     private void startEachNonRunningBehavior(final ServerLevel level, final E body) {
+         long time = level.getGameTime();
+ 
+-        for (Map<Activity, Set<BehaviorControl<? super E>>> behavioursByActivities : this.availableBehaviorsByPriority.values()) {
+-            for (Entry<Activity, Set<BehaviorControl<? super E>>> behavioursForActivity : behavioursByActivities.entrySet()) {
+-                Activity activity = behavioursForActivity.getKey();
+-                if (this.activeActivities.contains(activity)) {
+-                    for (BehaviorControl<? super E> behavior : behavioursForActivity.getValue()) {
+-                        if (behavior.getStatus() == Behavior.Status.STOPPED) {
+-                            behavior.tryStart(level, body, time);
+-                        }
++        // Sugarcane start - Optimise brain ticking - same order as vanilla, and the active activities are still
++        // checked group by group, so a behaviour that switches activity part way through is honoured exactly as before
++        if (this.sugarcane$groupActivities == null) {
++            this.sugarcane$buildBehaviours();
++        }
++        final Activity[] groupActivities = this.sugarcane$groupActivities;
++        final BehaviorControl<? super E>[][] groupBehaviours = this.sugarcane$groupBehaviours;
++        for (int group = 0; group < groupActivities.length; group++) {
++            if (this.activeActivities.contains(groupActivities[group])) {
++                for (BehaviorControl<? super E> behavior : groupBehaviours[group]) {
++                    // Sugarcane end - Optimise brain ticking
++                    if (behavior.getStatus() == Behavior.Status.STOPPED) {
++                        behavior.tryStart(level, body, time);
+                     }
+                 }
+             }
+@@ -427,8 +519,17 @@ public class Brain<E extends LivingEntity> {
+     private void tickEachRunningBehavior(final ServerLevel level, final E body) {
+         long timestamp = level.getGameTime();
+ 
+-        for (BehaviorControl<? super E> behavior : this.getRunningBehaviors()) {
+-            behavior.tickOrStop(level, body, timestamp);
++        // Sugarcane start - Optimise brain ticking
++        final BehaviorControl<? super E>[] running = this.sugarcane$takeRunningScratch();
++        final int count = this.sugarcane$collectRunning(running);
++        try {
++            for (int i = 0; i < count; i++) {
++                final BehaviorControl<? super E> behavior = running[i];
++                // Sugarcane end - Optimise brain ticking
++                behavior.tickOrStop(level, body, timestamp);
++            }
++        } finally { // Sugarcane - Optimise brain ticking
++            this.sugarcane$returnRunningScratch(running, count); // Sugarcane - Optimise brain ticking
+         }
+     }
+ 
+diff --git a/net/minecraft/world/entity/ai/behavior/GateBehavior.java b/net/minecraft/world/entity/ai/behavior/GateBehavior.java
+index 3adfb334068d3722329f91011c41d5e59b1956c9..c232468f4ea21d38c7c068b8577bf2241be44279 100644
+--- a/net/minecraft/world/entity/ai/behavior/GateBehavior.java
++++ b/net/minecraft/world/entity/ai/behavior/GateBehavior.java
+@@ -79,13 +79,24 @@ public class GateBehavior<E extends LivingEntity> implements BehaviorControl<E>
+     @Override
+     public final void tickOrStop(final ServerLevel level, final E body, final long timestamp) {
+         // Paper start - Perf: Remove streams from hot code
+-        for (final BehaviorControl<? super E> behavior : this.behaviors) {
++        final ShufflingList<BehaviorControl<? super E>> behaviors = this.behaviors; // Sugarcane - Optimise brain ticking
++        for (int i = 0, size = behaviors.sugarcane$size(); i < size; i++) { // Sugarcane - Optimise brain ticking
++            final BehaviorControl<? super E> behavior = behaviors.sugarcane$get(i); // Sugarcane - Optimise brain ticking
+             if (behavior.getStatus() == Behavior.Status.RUNNING) {
+                 behavior.tickOrStop(level, body, timestamp);
+             }
+         }
+         // Paper end - Perf: Remove streams from hot code
+-        if (this.behaviors.stream().noneMatch(behavior -> behavior.getStatus() == Behavior.Status.RUNNING)) {
++        // Sugarcane start - Optimise brain ticking
++        boolean anyRunning = false;
++        for (int i = 0, size = behaviors.sugarcane$size(); i < size; i++) {
++            if (behaviors.sugarcane$get(i).getStatus() == Behavior.Status.RUNNING) {
++                anyRunning = true;
++                break;
++            }
++        }
++        if (!anyRunning) {
++            // Sugarcane end - Optimise brain ticking
+             this.doStop(level, body, timestamp);
+         }
+     }
+@@ -94,7 +105,8 @@ public class GateBehavior<E extends LivingEntity> implements BehaviorControl<E>
+     public final void doStop(final ServerLevel level, final E body, final long timestamp) {
+         this.status = Behavior.Status.STOPPED;
+         // Paper start - Perf: Remove streams from hot code
+-        for (final BehaviorControl<? super E> behavior : this.behaviors) {
++        for (int i = 0, size = this.behaviors.sugarcane$size(); i < size; i++) { // Sugarcane - Optimise brain ticking
++            final BehaviorControl<? super E> behavior = this.behaviors.sugarcane$get(i); // Sugarcane - Optimise brain ticking
+             if (behavior.getStatus() == Behavior.Status.RUNNING) {
+                 behavior.doStop(level, body, timestamp);
+             }
+@@ -137,7 +149,8 @@ public class GateBehavior<E extends LivingEntity> implements BehaviorControl<E>
+             public <E extends LivingEntity> void apply(
+                 final ShufflingList<BehaviorControl<? super E>> behaviors, final ServerLevel level, final E body, final long timestamp
+             ) {
+-                for (final BehaviorControl<? super E> behavior : behaviors) {
++                for (int i = 0, size = behaviors.sugarcane$size(); i < size; i++) { // Sugarcane - Optimise brain ticking
++                    final BehaviorControl<? super E> behavior = behaviors.sugarcane$get(i); // Sugarcane - Optimise brain ticking
+                     if (behavior.getStatus() == Behavior.Status.STOPPED && behavior.tryStart(level, body, timestamp)) {
+                         break;
+                     }
+@@ -151,7 +164,8 @@ public class GateBehavior<E extends LivingEntity> implements BehaviorControl<E>
+             public <E extends LivingEntity> void apply(
+                 final ShufflingList<BehaviorControl<? super E>> behaviors, final ServerLevel level, final E body, final long timestamp
+             ) {
+-                for (final BehaviorControl<? super E> behavior : behaviors) {
++                for (int i = 0, size = behaviors.sugarcane$size(); i < size; i++) { // Sugarcane - Optimise brain ticking
++                    final BehaviorControl<? super E> behavior = behaviors.sugarcane$get(i); // Sugarcane - Optimise brain ticking
+                     if (behavior.getStatus() == Behavior.Status.STOPPED) {
+                         behavior.tryStart(level, body, timestamp);
+                     }
+diff --git a/net/minecraft/world/entity/ai/behavior/ShufflingList.java b/net/minecraft/world/entity/ai/behavior/ShufflingList.java
+index 909a44b7897bfcb250f82e0a703606d79ee22f29..c5a758ee35cc0e762480e670bb6dfe98fff9de97 100644
+--- a/net/minecraft/world/entity/ai/behavior/ShufflingList.java
++++ b/net/minecraft/world/entity/ai/behavior/ShufflingList.java
+@@ -60,6 +60,16 @@ public class ShufflingList<U> implements Iterable<U> {
+         return this.entries.stream().map(ShufflingList.WeightedEntry::getData);
+     }
+ 
++    // Sugarcane start - Optimise brain ticking - walk the entries without Guava's transforming iterator
++    public int sugarcane$size() {
++        return this.entries.size();
++    }
++
++    public U sugarcane$get(final int index) {
++        return this.entries.get(index).getData();
++    }
++    // Sugarcane end - Optimise brain ticking
++
+     @Override
+     public Iterator<U> iterator() {
+         return Iterators.transform(this.entries.iterator(), ShufflingList.WeightedEntry::getData);
