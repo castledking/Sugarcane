@@ -1,0 +1,464 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: castledking <thecastledking@gmail.com>
+Date: Sun, 1 Nov 2026 04:04:05 -0800
+Subject: [PATCH] Optimise villager AI
+
+- PoiCompetitorScan runs for every employed villager on every tick and
+  looks at every villager within 48 blocks. Read their job sites without a
+  map lookup, and compare the job site before reading health, since that
+  is the check that almost always fails. Every check is side-effect free,
+  so the outcome is unchanged.
+- Sort nearby entities by distances worked out once, rather than twice per
+  comparison. Both sorts are stable, so the order is unchanged.
+- POI searches look up each column's poi chunk once rather than once per
+  section.
+- Remove streams from GolemSensor, MobSensor, PlayerSensor, TemptingSensor,
+  YieldJobSite and TradeWithVillager, and test the entity type before the
+  distance in SetLookAndInteract, following Leaf's patches of the same
+  names (https://github.com/Winds-Studio/Leaf).
+- Do not set a mob's frozen ticks to the value they already have,
+  following Leaf.
+
+diff --git a/ca/spottedleaf/moonrise/patches/poi_lookup/PoiAccess.java b/ca/spottedleaf/moonrise/patches/poi_lookup/PoiAccess.java
+index 84c3e9ab738cd520abbefd7c274107431554723f..8ed0c4f625001c319c547e918caa597b2473e737 100644
+--- a/ca/spottedleaf/moonrise/patches/poi_lookup/PoiAccess.java
++++ b/ca/spottedleaf/moonrise/patches/poi_lookup/PoiAccess.java
+@@ -114,6 +114,7 @@ public final class PoiAccess {
+         final int centerZ = sourcePosition.getZ() >> 4;
+         final io.papermc.paper.sugarcane.PoiSearchQueue queue = new io.papermc.paper.sugarcane.PoiSearchQueue(lowerX, lowerY, lowerZ, upperX, upperY, upperZ); // Sugarcane - flat array search queue
+         queue.enqueue(centerX, centerY, centerZ); // Sugarcane - flat array search queue
++        final PoiManager.SearchSections sections = poiStorage.sugarcane$searchSections(lowerX, lowerZ, upperX, upperZ); // Sugarcane - Optimise villager AI
+ 
+         while (!queue.isEmpty()) {
+             final long key = queue.dequeue(); // Sugarcane - flat array search queue
+@@ -142,7 +143,7 @@ public final class PoiAccess {
+             // queue all neighbours
+             queue.enqueueNeighbours(sectionX, sectionY, sectionZ); // Sugarcane - flat array search queue
+ 
+-            final Optional<PoiSection> poiSectionOptional = load ? poiStorage.getOrLoad(key) : poiStorage.get(key);
++            final Optional<PoiSection> poiSectionOptional = load ? sections.getOrLoad(key) : sections.get(key); // Sugarcane - Optimise villager AI
+ 
+             if (poiSectionOptional == null || !poiSectionOptional.isPresent()) {
+                 continue;
+@@ -334,6 +335,7 @@ public final class PoiAccess {
+         final int centerZ = sourcePosition.getZ() >> 4;
+         final io.papermc.paper.sugarcane.PoiSearchQueue queue = new io.papermc.paper.sugarcane.PoiSearchQueue(lowerX, lowerY, lowerZ, upperX, upperY, upperZ); // Sugarcane - flat array search queue
+         queue.enqueue(centerX, centerY, centerZ); // Sugarcane - flat array search queue
++        final PoiManager.SearchSections sections = poiStorage.sugarcane$searchSections(lowerX, lowerZ, upperX, upperZ); // Sugarcane - Optimise villager AI
+ 
+         while (!queue.isEmpty()) {
+             final long key = queue.dequeue(); // Sugarcane - flat array search queue
+@@ -363,7 +365,7 @@ public final class PoiAccess {
+             // queue all neighbours
+             queue.enqueueNeighbours(sectionX, sectionY, sectionZ); // Sugarcane - flat array search queue
+ 
+-            final Optional<PoiSection> poiSectionOptional = load ? poiStorage.getOrLoad(key) : poiStorage.get(key);
++            final Optional<PoiSection> poiSectionOptional = load ? sections.getOrLoad(key) : sections.get(key); // Sugarcane - Optimise villager AI
+ 
+             if (poiSectionOptional == null || !poiSectionOptional.isPresent()) {
+                 continue;
+diff --git a/net/minecraft/world/entity/LivingEntity.java b/net/minecraft/world/entity/LivingEntity.java
+index 23297b54c74684765f90e9e599d051a44357e9a5..5ba1d112c9757c46ccd8388eb1b8aa5260c33e87 100644
+--- a/net/minecraft/world/entity/LivingEntity.java
++++ b/net/minecraft/world/entity/LivingEntity.java
+@@ -3789,7 +3789,13 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+         if (this.level() instanceof ServerLevel serverLevel) {
+             profiler.push("freezing");
+             if ((!this.isInPowderSnow || !this.canFreeze()) && !this.freezeLocked) { // Paper - Freeze Tick Lock API
+-                this.setTicksFrozen(Math.max(0, this.getTicksFrozen() - 2));
++                // Sugarcane start - Optimise villager AI - setting the value it already has does nothing, so skip the lookup and boxing
++                final int ticksFrozen = this.getTicksFrozen();
++                final int newTicksFrozen = Math.max(0, ticksFrozen - 2);
++                if (newTicksFrozen != ticksFrozen) {
++                    this.setTicksFrozen(newTicksFrozen);
++                }
++                // Sugarcane end - Optimise villager AI
+             }
+ 
+             this.removeFrost();
+diff --git a/net/minecraft/world/entity/ai/Brain.java b/net/minecraft/world/entity/ai/Brain.java
+index 30cfcc2233622a0e64973f0d8ad4a5ebeea3f151..bf02b188be8450fb6bd6c000bdb616b828572ad4 100644
+--- a/net/minecraft/world/entity/ai/Brain.java
++++ b/net/minecraft/world/entity/ai/Brain.java
+@@ -204,6 +204,13 @@ public class Brain<E extends LivingEntity> {
+         return (MemorySlot<T>)this.memories.get(memoryType);
+     }
+ 
++    // Sugarcane start - Optimise villager AI - a brain keeps the same slot for a memory for as long as it lives,
++    // so hot callers can hold on to it instead of looking it up every time
++    public <T> @Nullable MemorySlot<T> sugarcane$getMemorySlotIfPresent(final MemoryModuleType<T> memoryType) {
++        return this.getMemorySlotIfPresent(memoryType);
++    }
++    // Sugarcane end - Optimise villager AI
++
+     private <T> MemorySlot<T> getMemorySlot(final MemoryModuleType<T> memoryType) {
+         MemorySlot<T> result = this.getMemorySlotIfPresent(memoryType);
+         if (result == null) {
+diff --git a/net/minecraft/world/entity/ai/behavior/PoiCompetitorScan.java b/net/minecraft/world/entity/ai/behavior/PoiCompetitorScan.java
+index c507cbb1b0d89f8fe5a00e67eea510f7516fe040..013d9a7368e62a7903ad220bf89ce61eb6c69320 100644
+--- a/net/minecraft/world/entity/ai/behavior/PoiCompetitorScan.java
++++ b/net/minecraft/world/entity/ai/behavior/PoiCompetitorScan.java
+@@ -38,12 +38,15 @@ public class PoiCompetitorScan {
+                                         if (!(other instanceof final Villager otherVillager)) {
+                                             continue;
+                                         }
+-                                        if (!other.isAlive()) {
++                                        // Sugarcane start - Optimise villager AI - both checks are side-effect free, and almost no villager
++                                        // shares this job site, so check that before reading its health
++                                        if (!competesForSameJobsite(pos, poiType, otherVillager)) {
+                                             continue;
+                                         }
+-                                        if (!competesForSameJobsite(pos, poiType, otherVillager)) {
++                                        if (!other.isAlive()) {
+                                             continue;
+                                         }
++                                        // Sugarcane end - Optimise villager AI
+                                         winner = selectWinner(winner, otherVillager);
+                                     }
+                                 }
+@@ -71,8 +74,8 @@ public class PoiCompetitorScan {
+     }
+ 
+     private static boolean competesForSameJobsite(final GlobalPos pos, final Holder<PoiType> poiType, final Villager nearbyVillager) {
+-        Optional<GlobalPos> jobSite = nearbyVillager.getBrain().getMemory(MemoryModuleType.JOB_SITE);
+-        return jobSite.isPresent() && pos.equals(jobSite.get()) && hasMatchingProfession(poiType, nearbyVillager.getVillagerData().profession());
++        GlobalPos jobSite = nearbyVillager.sugarcane$getJobSite(); // Sugarcane - Optimise villager AI - read the memory slot without a map lookup
++        return jobSite != null && pos.equals(jobSite) && hasMatchingProfession(poiType, nearbyVillager.getVillagerData().profession()); // Sugarcane - Optimise villager AI
+     }
+ 
+     private static boolean hasMatchingProfession(final Holder<PoiType> poiType, final Holder<VillagerProfession> profession) {
+diff --git a/net/minecraft/world/entity/ai/behavior/SetLookAndInteract.java b/net/minecraft/world/entity/ai/behavior/SetLookAndInteract.java
+index 71b8f9a7d4fe97f56fe1fc03b48e4dcd455ccd1e..eda50008032a73fb83e2be290a323bac7dc9f562 100644
+--- a/net/minecraft/world/entity/ai/behavior/SetLookAndInteract.java
++++ b/net/minecraft/world/entity/ai/behavior/SetLookAndInteract.java
+@@ -20,7 +20,7 @@ public class SetLookAndInteract {
+                     i,
+                     (lookTarget, interactionTarget, nearestEntities) -> (level, body, timestamp) -> {
+                         Optional<LivingEntity> closest = i.<NearestVisibleLivingEntities>get(nearestEntities)
+-                            .findClosest(e -> e.distanceToSqr(body) <= interactionRangeSqr && e.is(type));
++                            .findClosest(e -> e.is(type) && e.distanceToSqr(body) <= interactionRangeSqr); // Sugarcane - Optimise villager AI - cheap type check first, both checks are side-effect free
+                         if (closest.isEmpty()) {
+                             return false;
+                         }
+diff --git a/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java b/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java
+index ec104015086a37c3fdf549aaf36ef40733b14802..9c1afb1a1cb5454d23eb8170f4f6e6366efe3584 100644
+--- a/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java
++++ b/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java
+@@ -75,7 +75,15 @@ public class TradeWithVillager extends Behavior<Villager> {
+     private static Set<Item> figureOutWhatIAmWillingToTrade(final Villager myBody, final Villager target) {
+         ImmutableSet<Item> targetItems = target.getVillagerData().profession().value().requestedItems();
+         ImmutableSet<Item> selfItems = myBody.getVillagerData().profession().value().requestedItems();
+-        return targetItems.stream().filter(entry -> !selfItems.contains(entry)).collect(Collectors.toSet());
++        // Sugarcane start - Optimise villager AI - remove stream
++        Set<Item> willingToTrade = new java.util.HashSet<>();
++        for (final Item item : targetItems) {
++            if (!selfItems.contains(item)) {
++                willingToTrade.add(item);
++            }
++        }
++        return willingToTrade;
++        // Sugarcane end - Optimise villager AI - remove stream
+     }
+ 
+     private static void throwHalfStack(final Villager villager, final Predicate<ItemStack> predicate, final LivingEntity target) {
+diff --git a/net/minecraft/world/entity/ai/behavior/YieldJobSite.java b/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
+index 09cc0f75c0dea7d9ef9caf9b1f14f46e4da84375..131e18031f256efbb88041fbc91e75729e960b04 100644
+--- a/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
++++ b/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
+@@ -41,14 +41,9 @@ public class YieldJobSite {
+                             return true;
+                         }
+ 
+-                        i.<List<LivingEntity>>get(nearestEntities)
+-                            .stream()
+-                            .filter(v -> v instanceof Villager && v != body)
+-                            .map(v -> (Villager)v)
+-                            .filter(LivingEntity::isAlive)
+-                            .filter(v -> nearbyWantsJobsite(poiType.get(), v, poiPos))
+-                            .findFirst()
+-                            .ifPresent(nearbyVillager -> {
++                        // Sugarcane start - Optimise villager AI - remove stream
++                        for (final LivingEntity entity : i.<List<LivingEntity>>get(nearestEntities)) {
++                            if (entity instanceof Villager nearbyVillager && entity != body && nearbyVillager.isAlive() && nearbyWantsJobsite(poiType.get(), nearbyVillager, poiPos)) {
+                                 walkTarget.erase();
+                                 lookTarget.erase();
+                                 potentialJob.erase();
+@@ -57,7 +52,10 @@ public class YieldJobSite {
+                                     nearbyVillager.getBrain().setMemory(MemoryModuleType.POTENTIAL_JOB_SITE, GlobalPos.of(level.dimension(), poiPos));
+                                     level.debugSynchronizers().updatePoi(poiPos);
+                                 }
+-                            });
++                                break;
++                            }
++                        }
++                        // Sugarcane end - Optimise villager AI - remove stream
+                         return true;
+                     }
+                 )
+diff --git a/net/minecraft/world/entity/ai/sensing/GolemSensor.java b/net/minecraft/world/entity/ai/sensing/GolemSensor.java
+index 6bdc94f4de3a3190907fe0b0325223ad31a600e9..9db83f0516aba8945859e9754a169b39ce926a05 100644
+--- a/net/minecraft/world/entity/ai/sensing/GolemSensor.java
++++ b/net/minecraft/world/entity/ai/sensing/GolemSensor.java
+@@ -33,7 +33,15 @@ public class GolemSensor extends Sensor<LivingEntity> {
+     public static void checkForNearbyGolem(final LivingEntity body) {
+         Optional<List<LivingEntity>> livingEntitiesMemory = body.getBrain().getMemory(MemoryModuleType.NEAREST_LIVING_ENTITIES);
+         if (!livingEntitiesMemory.isEmpty()) {
+-            boolean golemPresent = livingEntitiesMemory.get().stream().anyMatch(entity -> entity.is(EntityTypes.IRON_GOLEM));
++            // Sugarcane start - Optimise villager AI - remove stream
++            boolean golemPresent = false;
++            for (final LivingEntity entity : livingEntitiesMemory.get()) {
++                if (entity.is(EntityTypes.IRON_GOLEM)) {
++                    golemPresent = true;
++                    break;
++                }
++            }
++            // Sugarcane end - Optimise villager AI - remove stream
+             if (golemPresent) {
+                 golemDetected(body);
+             }
+diff --git a/net/minecraft/world/entity/ai/sensing/MobSensor.java b/net/minecraft/world/entity/ai/sensing/MobSensor.java
+index ac9c50d680814b5752f7c712633555d587633598..9ae085e52322b8c87c606d7ef9e3007e270d1fe1 100644
+--- a/net/minecraft/world/entity/ai/sensing/MobSensor.java
++++ b/net/minecraft/world/entity/ai/sensing/MobSensor.java
+@@ -46,7 +46,15 @@ public class MobSensor<T extends LivingEntity> extends Sensor<T> {
+     public void checkForMobsNearby(final T body) {
+         Optional<List<LivingEntity>> livingEntitiesMemory = body.getBrain().getMemory(MemoryModuleType.NEAREST_LIVING_ENTITIES);
+         if (!livingEntitiesMemory.isEmpty()) {
+-            boolean mobPresent = livingEntitiesMemory.get().stream().anyMatch(entity -> this.mobTest.test(body, entity));
++            // Sugarcane start - Optimise villager AI - remove stream
++            boolean mobPresent = false;
++            for (final LivingEntity entity : livingEntitiesMemory.get()) {
++                if (this.mobTest.test(body, entity)) {
++                    mobPresent = true;
++                    break;
++                }
++            }
++            // Sugarcane end - Optimise villager AI - remove stream
+             if (mobPresent) {
+                 this.mobDetected(body);
+             }
+diff --git a/net/minecraft/world/entity/ai/sensing/NearestItemSensor.java b/net/minecraft/world/entity/ai/sensing/NearestItemSensor.java
+index 8aeea55380462421cde43afb4b2fb0ce44b65195..3d60b3d7f84838b5b353046a118069a8a5f4e56f 100644
+--- a/net/minecraft/world/entity/ai/sensing/NearestItemSensor.java
++++ b/net/minecraft/world/entity/ai/sensing/NearestItemSensor.java
+@@ -25,7 +25,7 @@ public class NearestItemSensor extends Sensor<Mob> {
+     protected void doTick(final ServerLevel level, final Mob body) {
+         Brain<?> brain = body.getBrain();
+         List<ItemEntity> items = level.getEntitiesOfClass(ItemEntity.class, body.getBoundingBox().inflate(32.0, 16.0, 32.0), item -> item.closerThan(body, MAX_DISTANCE_TO_WANTED_ITEM) && body.wantsToPickUp(level, item.getItem())); // Paper - Perf: Move predicate into getEntities
+-        items.sort(Comparator.comparingDouble(body::distanceToSqr));
++        io.papermc.paper.sugarcane.EntityDistanceSort.sortByDistanceSqr(items, body); // Sugarcane - Optimise villager AI - same order, each distance computed once
+         // Paper start - Perf: remove streams from hot code
+         ItemEntity nearest = null;
+         for (final ItemEntity item : items) {
+diff --git a/net/minecraft/world/entity/ai/sensing/NearestLivingEntitySensor.java b/net/minecraft/world/entity/ai/sensing/NearestLivingEntitySensor.java
+index 3578ece216827fd5d8c1206c689fc608e97b50df..dc1e2e1057b176c2ca88f5a800ee8275b6a36574 100644
+--- a/net/minecraft/world/entity/ai/sensing/NearestLivingEntitySensor.java
++++ b/net/minecraft/world/entity/ai/sensing/NearestLivingEntitySensor.java
+@@ -18,7 +18,7 @@ public class NearestLivingEntitySensor<T extends LivingEntity> extends Sensor<T>
+         double followRange = body.getAttributeValue(Attributes.FOLLOW_RANGE);
+         AABB boundingBox = body.getBoundingBox().inflate(followRange, followRange, followRange);
+         List<LivingEntity> livingEntities = level.getEntitiesOfClass(LivingEntity.class, boundingBox, mob -> mob != body && mob.isAlive());
+-        livingEntities.sort(Comparator.comparingDouble(body::distanceToSqr));
++        io.papermc.paper.sugarcane.EntityDistanceSort.sortByDistanceSqr(livingEntities, body); // Sugarcane - Optimise villager AI - same order, each distance computed once
+         Brain<?> brain = body.getBrain();
+         brain.setMemory(MemoryModuleType.NEAREST_LIVING_ENTITIES, livingEntities);
+         brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES, new NearestVisibleLivingEntities(level, body, livingEntities));
+diff --git a/net/minecraft/world/entity/ai/sensing/PlayerSensor.java b/net/minecraft/world/entity/ai/sensing/PlayerSensor.java
+index 22f58ba0bce5db69c7bcea76d40bac6079f5581a..0eee90cb243ea34aacf19fdf7ff0d805a1b39026 100644
+--- a/net/minecraft/world/entity/ai/sensing/PlayerSensor.java
++++ b/net/minecraft/world/entity/ai/sensing/PlayerSensor.java
+@@ -26,17 +26,31 @@ public class PlayerSensor extends Sensor<LivingEntity> {
+ 
+     @Override
+     protected void doTick(final ServerLevel level, final LivingEntity body) {
+-        List<Player> players = level.players()
+-            .stream()
+-            .filter(EntitySelector.NO_SPECTATORS)
+-            .filter(player -> body.closerThan(player, this.getFollowDistance(body)))
+-            .sorted(Comparator.comparingDouble(body::distanceToSqr))
+-            .collect(Collectors.toList());
++        // Sugarcane start - Optimise villager AI - remove streams
++        List<Player> players = new java.util.ArrayList<>();
++        for (final Player player : level.players()) {
++            if (EntitySelector.NO_SPECTATORS.test(player) && body.closerThan(player, this.getFollowDistance(body))) {
++                players.add(player);
++            }
++        }
++        players.sort(Comparator.comparingDouble(body::distanceToSqr));
+         Brain<?> brain = body.getBrain();
+         brain.setMemory(MemoryModuleType.NEAREST_PLAYERS, players);
+-        List<Player> visiblePlayers = players.stream().filter(livingEntity -> isEntityTargetable(level, body, livingEntity)).collect(Collectors.toList());
++        List<Player> visiblePlayers = new java.util.ArrayList<>(players.size());
++        for (final Player player : players) {
++            if (isEntityTargetable(level, body, player)) {
++                visiblePlayers.add(player);
++            }
++        }
+         brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_PLAYER, visiblePlayers.isEmpty() ? null : visiblePlayers.get(0));
+-        List<Player> visibleAttackablePlayers = visiblePlayers.stream().filter(livingEntity -> isEntityAttackable(level, body, livingEntity)).toList();
++        List<Player> attackablePlayers = new java.util.ArrayList<>(visiblePlayers.size());
++        for (final Player player : visiblePlayers) {
++            if (isEntityAttackable(level, body, player)) {
++                attackablePlayers.add(player);
++            }
++        }
++        List<Player> visibleAttackablePlayers = java.util.Collections.unmodifiableList(attackablePlayers); // Stream#toList was unmodifiable
++        // Sugarcane end - Optimise villager AI - remove streams
+         brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_ATTACKABLE_PLAYERS, visibleAttackablePlayers);
+         brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_ATTACKABLE_PLAYER, visibleAttackablePlayers.isEmpty() ? null : visibleAttackablePlayers.get(0));
+     }
+diff --git a/net/minecraft/world/entity/ai/sensing/TemptingSensor.java b/net/minecraft/world/entity/ai/sensing/TemptingSensor.java
+index f0dc4231b79e4f02416917dacce978121ec6d7e2..081e33859b8d4fe6ea066b4267758c7c3e688f06 100644
+--- a/net/minecraft/world/entity/ai/sensing/TemptingSensor.java
++++ b/net/minecraft/world/entity/ai/sensing/TemptingSensor.java
+@@ -38,14 +38,15 @@ public class TemptingSensor extends Sensor<PathfinderMob> {
+     protected void doTick(final ServerLevel level, final PathfinderMob body) {
+         Brain<?> brain = body.getBrain();
+         TargetingConditions targeting = TEMPT_TARGETING.copy().range((float)body.getAttributeValue(Attributes.TEMPT_RANGE));
+-        List<Player> players = level.players()
+-            .stream()
+-            .filter(EntitySelector.NO_SPECTATORS)
+-            .filter(playerx -> targeting.test(level, body, playerx))
+-            .filter(p -> this.playerHoldingTemptation(body, p))
+-            .filter(playerx -> !body.hasPassenger(playerx))
+-            .sorted(Comparator.comparingDouble(body::distanceToSqr))
+-            .collect(Collectors.toList());
++        // Sugarcane start - Optimise villager AI - remove stream
++        List<Player> players = new java.util.ArrayList<>();
++        for (final Player player : level.players()) {
++            if (EntitySelector.NO_SPECTATORS.test(player) && targeting.test(level, body, player) && this.playerHoldingTemptation(body, player) && !body.hasPassenger(player)) {
++                players.add(player);
++            }
++        }
++        players.sort(Comparator.comparingDouble(body::distanceToSqr));
++        // Sugarcane end - Optimise villager AI - remove stream
+         if (!players.isEmpty()) {
+             Player player = players.get(0);
+             // CraftBukkit start
+diff --git a/net/minecraft/world/entity/ai/village/poi/PoiManager.java b/net/minecraft/world/entity/ai/village/poi/PoiManager.java
+index 3b07e731e8d16c2b71cb55b85163029cf56fd02e..5048102e816d3227651560d82b3ca08c89040b21 100644
+--- a/net/minecraft/world/entity/ai/village/poi/PoiManager.java
++++ b/net/minecraft/world/entity/ai/village/poi/PoiManager.java
+@@ -102,6 +102,92 @@ public class PoiManager extends SectionStorage<PoiSection, PoiSection.Packed> im
+         return Optional.empty();
+     }
+ 
++    // Sugarcane start - Optimise villager AI - remember each column's poi chunk for the length of one PoiAccess search
++    // get and getOrLoad look the chunk holder up again for every section, and a 48 block villager search visits up to
++    // 7x7 columns of 24 sections each. Chunk holders are only removed while the chunk system ticks, so a loaded poi
++    // chunk is the same object for the whole search, including one this search had to load itself.
++    public SearchSections sugarcane$searchSections(final int lowerX, final int lowerZ, final int upperX, final int upperZ) {
++        return new SearchSections(lowerX, lowerZ, upperX, upperZ);
++    }
++
++    public final class SearchSections {
++        private final int lowerX;
++        private final int lowerZ;
++        private final int sizeX;
++        private final int sizeZ;
++        private final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk[] chunks;
++
++        private SearchSections(final int lowerX, final int lowerZ, final int upperX, final int upperZ) {
++            this.lowerX = lowerX;
++            this.lowerZ = lowerZ;
++            this.sizeX = upperX - lowerX + 1;
++            this.sizeZ = upperZ - lowerZ + 1;
++            this.chunks = new ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk[this.sizeX * this.sizeZ];
++        }
++
++        private int index(final int chunkX, final int chunkZ) {
++            final int offsetX = chunkX - this.lowerX;
++            final int offsetZ = chunkZ - this.lowerZ;
++            return offsetX < 0 || offsetX >= this.sizeX || offsetZ < 0 || offsetZ >= this.sizeZ ? -1 : offsetX + offsetZ * this.sizeX;
++        }
++
++        private ca.spottedleaf.moonrise.patches.chunk_system.level.poi.@org.jspecify.annotations.Nullable PoiChunk getPoiChunkIfLoaded(
++            final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkHolderManager manager, final int chunkX, final int chunkZ
++        ) {
++            final int index = this.index(chunkX, chunkZ);
++            if (index < 0) {
++                return manager.getPoiChunkIfLoaded(chunkX, chunkZ, true);
++            }
++            ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk chunk = this.chunks[index];
++            if (chunk == null) {
++                // a column with nothing loaded is asked again next time
++                chunk = this.chunks[index] = manager.getPoiChunkIfLoaded(chunkX, chunkZ, true);
++            }
++            return chunk;
++        }
++
++        // the same as PoiManager#get
++        public Optional<PoiSection> get(final long pos) {
++            final int chunkX = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkSectionX(pos);
++            final int chunkY = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkSectionY(pos);
++            final int chunkZ = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkSectionZ(pos);
++
++            ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(PoiManager.this.world, chunkX, chunkZ, "Accessing poi chunk off-main");
++
++            final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk ret = this.getPoiChunkIfLoaded(((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)PoiManager.this.world).moonrise$getChunkTaskScheduler().chunkHolderManager, chunkX, chunkZ);
++
++            return ret == null ? Optional.empty() : ret.getSectionForVanilla(chunkY);
++        }
++
++        // the same as PoiManager#getOrLoad
++        public Optional<PoiSection> getOrLoad(final long pos) {
++            final int chunkX = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkSectionX(pos);
++            final int chunkY = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkSectionY(pos);
++            final int chunkZ = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkSectionZ(pos);
++
++            ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(PoiManager.this.world, chunkX, chunkZ, "Accessing poi chunk off-main");
++
++            final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkHolderManager manager = ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)PoiManager.this.world).moonrise$getChunkTaskScheduler().chunkHolderManager;
++
++            if (chunkY >= ca.spottedleaf.moonrise.common.util.WorldUtil.getMinSection(PoiManager.this.world) && chunkY <= ca.spottedleaf.moonrise.common.util.WorldUtil.getMaxSection(PoiManager.this.world)) {
++                final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk ret = this.getPoiChunkIfLoaded(manager, chunkX, chunkZ);
++                if (ret != null) {
++                    return ret.getSectionForVanilla(chunkY);
++                } else {
++                    final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk loaded = manager.loadPoiChunk(chunkX, chunkZ);
++                    final int index = this.index(chunkX, chunkZ);
++                    if (index >= 0) {
++                        this.chunks[index] = loaded;
++                    }
++                    return loaded.getSectionForVanilla(chunkY);
++                }
++            }
++            // retain vanilla behavior: do not load section if out of bounds!
++            return Optional.empty();
++        }
++    }
++    // Sugarcane end - Optimise villager AI
++
+     @Override
+     protected PoiSection getOrCreate(final long pos) {
+         final int chunkX = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkSectionX(pos);
+diff --git a/net/minecraft/world/entity/npc/villager/Villager.java b/net/minecraft/world/entity/npc/villager/Villager.java
+index 696e95c9f8b7945e2a2eb0ebb4e7d1109bac2121..892de055520ec4727603df105646060545154731 100644
+--- a/net/minecraft/world/entity/npc/villager/Villager.java
++++ b/net/minecraft/world/entity/npc/villager/Villager.java
+@@ -238,6 +238,25 @@ public class Villager extends AbstractVillager implements VillagerDataHolder, Re
+     }
+     // Sugarcane end - Purpur - Lobotomize stuck villagers
+ 
++    // Sugarcane start - Optimise villager AI - PoiCompetitorScan reads the job site of every nearby villager, every tick
++    private @Nullable Brain<?> sugarcane$jobSiteBrain;
++    private net.minecraft.world.entity.ai.memory.@Nullable MemorySlot<GlobalPos> sugarcane$jobSiteSlot;
++
++    // the same value as getBrain().getMemory(MemoryModuleType.JOB_SITE).orElse(null)
++    public @Nullable GlobalPos sugarcane$getJobSite() {
++        final Brain<Villager> brain = this.getBrain();
++        if (brain != this.sugarcane$jobSiteBrain) {
++            final net.minecraft.world.entity.ai.memory.MemorySlot<GlobalPos> slot = brain.sugarcane$getMemorySlotIfPresent(MemoryModuleType.JOB_SITE);
++            if (slot == null) {
++                return brain.getMemory(MemoryModuleType.JOB_SITE).orElse(null); // fails the same way for an unregistered memory
++            }
++            this.sugarcane$jobSiteBrain = brain;
++            this.sugarcane$jobSiteSlot = slot;
++        }
++        return this.sugarcane$jobSiteSlot.value();
++    }
++    // Sugarcane end - Optimise villager AI
++
+     @Override
+     public Brain<Villager> getBrain() {
+         return (Brain<Villager>)super.getBrain();

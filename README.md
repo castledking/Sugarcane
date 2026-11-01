@@ -65,6 +65,7 @@ Sugarcane restores or improves the following behaviors:
 ### 🧑‍🌾 Villagers
 - **Fixes villager POI searches** → restores vanilla's 48 block search range, and makes the searches cheaper
 - **Purpur's villager options** → lobotomize stuck villagers, configurable search radius, iron golem limit
+- **Cheaper villager brains** → about a quarter less tick time on villager-heavy servers, with vanilla behavior unchanged
 
 ### 🛠️ Automation & Crafting
 - **Raises recipe spam limits**
@@ -252,6 +253,19 @@ made those searches expensive, and ports Purpur's villager options for servers t
 - **Behavior tick rates work again** → `tick-rates.behavior.villager.acquirepoi` and `validatenearbypoi` had no
   effect, because those behaviors are no longer separate classes. They now throttle the behaviors as Paper
   documents.
+- **Cheaper brain ticks** → every mob with a brain (villagers, piglins, axolotls, goats, frogs and more) walked
+  several nested maps twice per tick to decide which behaviors to start and run. Sugarcane keeps the same behaviors
+  in arrays, in the same order, and still checks the active activity group by group, so a villager that starts
+  panicking part way through a tick behaves exactly as before.
+- **Cheaper job site checks** → every tick, each employed villager looks at every villager within 48 blocks for one
+  claiming the same workstation. In a trading hall that means nearly every villager, every tick. The check now reads
+  job sites directly and tests the condition that actually fails first.
+- **Leaf's sensor optimizations** → golem, mob, player and tempting sensors without streams, nearest-entity sorting
+  that works out each distance once, and one chunk lookup per column in POI searches.
+
+On 26.3, in a test world with 1,080 villagers (900 in a trading hall and 180 in 60 zombie-scare iron golem pods),
+all kept active, build 11 took the average tick from 18.1 ms to 13.3 ms during the day and from 15.7 ms to 11.1 ms
+at night, compared with build 10. Golem output was the same.
 
 ### ⚙️ Configuration
 
