@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   publish:
+    if: github.repository == 'PaperMC/Paper' # Sugarcane - PR publishing only exists on PaperMC/Paper
     runs-on: ubuntu-latest
     steps:
       - name: Generate an Application repository access token

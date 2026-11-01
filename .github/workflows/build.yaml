@@ -13,9 +13,8 @@ on:
       - reopened
       - synchronize
       - labeled
+  # Sugarcane - Paper builds ver/26.2 with release-26.2.yaml, which only runs on PaperMC/Paper, so build every branch here
   push:
-    branches-ignore:
-      - ver/26.2
 
 jobs:
   build:
