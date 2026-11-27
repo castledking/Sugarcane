@@ -247,7 +247,7 @@ made those searches expensive, and ports Purpur's villager options for servers t
 
 - **Vanilla POI search range** → since 26.1, Paper's villager POI search ignored vanilla's 48 block distance limit.
   Villagers could pick beds and workstations far above or below them, and every search swept the whole world
-  height. Sugarcane restores the 48 block sphere.
+  height. Sugarcane restored the 48 block sphere in build 10, and Paper fixed it upstream for 26.3 in November 2026.
 - **Faster POI searches** → POI searches track the chunk sections they have visited in a bitset instead of a hash
   set. They visit sections in the same order, so results are identical.
 - **Behavior tick rates work again** → `tick-rates.behavior.villager.acquirepoi` and `validatenearbypoi` had no

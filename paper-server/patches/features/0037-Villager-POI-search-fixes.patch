@@ -122,21 +122,18 @@ index 85d80b3952a76b0ca7f67401a659cf35dd55b082..84c3e9ab738cd520abbefd7c27410743
              final Optional<PoiSection> poiSectionOptional = load ? poiStorage.getOrLoad(key) : poiStorage.get(key);
  
 diff --git a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
-index 07566301e9c3e7bc382f9f590437693fac3052bc..ae8e21a4d10fdce0189f2b0cf4ea68b1c882520e 100644
+index c8de1c70bd9b0eade3b3bcbb74c843c1f43eae1f..896de77107aa7ef01e0ee5841ebffe72c8414296 100644
 --- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
 +++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
-@@ -96,7 +96,13 @@ public class AcquirePoi {
+@@ -96,7 +96,10 @@ public class AcquirePoi {
                          };
                          // Paper start - optimise POI searches
                          java.util.List<Pair<Holder<PoiType>, BlockPos>> poiPositionsRaw = new java.util.ArrayList<>();
--                        ca.spottedleaf.moonrise.patches.poi_lookup.PoiAccess.findNearestPoiPositions(poiManager, poiType, cacheTest, body.blockPosition(), SCAN_RANGE, Double.MAX_VALUE, PoiManager.Occupancy.HAS_SPACE, ca.spottedleaf.moonrise.patches.poi_lookup.PoiAccess.LOAD_FOR_SEARCHING, 5, poiPositionsRaw);
-+                        // Sugarcane start - limit the search to the vanilla sphere, and Purpur - Configurable villager search radius
-+                        // Vanilla's findAllClosestFirstWithType only returns POIs within scanRange of the villager in all three
-+                        // axes. Without the squared-distance limit this search spans the whole world height, so it can never
-+                        // stop early and keeps offering villagers beds and job sites far above or below them.
+-                        ca.spottedleaf.moonrise.patches.poi_lookup.PoiAccess.findNearestPoiPositions(poiManager, poiType, cacheTest, body.blockPosition(), SCAN_RANGE, (double)((long)SCAN_RANGE * (long)SCAN_RANGE), PoiManager.Occupancy.HAS_SPACE, ca.spottedleaf.moonrise.patches.poi_lookup.PoiAccess.LOAD_FOR_SEARCHING, 5, poiPositionsRaw);
++                        // Sugarcane start - Purpur - Configurable villager search radius
 +                        final int scanRange = level.paperConfig().sugarcane.villagers.searchRadius.acquirePoi;
 +                        ca.spottedleaf.moonrise.patches.poi_lookup.PoiAccess.findNearestPoiPositions(poiManager, poiType, cacheTest, body.blockPosition(), scanRange, (double)((long)scanRange * (long)scanRange), PoiManager.Occupancy.HAS_SPACE, ca.spottedleaf.moonrise.patches.poi_lookup.PoiAccess.LOAD_FOR_SEARCHING, 5, poiPositionsRaw);
-+                        // Sugarcane end - limit the search to the vanilla sphere, and Purpur - Configurable villager search radius
++                        // Sugarcane end - Purpur - Configurable villager search radius
                          Set<Pair<Holder<PoiType>, BlockPos>> poiPositions = new java.util.HashSet<>(poiPositionsRaw.size());
                          for (Pair<Holder<PoiType>, BlockPos> pair : poiPositionsRaw) {
                              if (validPoi.test(level, pair.getSecond())) {

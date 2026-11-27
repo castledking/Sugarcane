@@ -58,10 +58,10 @@ index 84c3e9ab738cd520abbefd7c274107431554723f..8ed0c4f625001c319c547e918caa597b
              if (poiSectionOptional == null || !poiSectionOptional.isPresent()) {
                  continue;
 diff --git a/net/minecraft/world/entity/LivingEntity.java b/net/minecraft/world/entity/LivingEntity.java
-index 23297b54c74684765f90e9e599d051a44357e9a5..5ba1d112c9757c46ccd8388eb1b8aa5260c33e87 100644
+index 0aabee33497faf8179bfa0f79a52e017ccd2eb5c..b752962a29af658cd6322c8f4dc1db6333611c17 100644
 --- a/net/minecraft/world/entity/LivingEntity.java
 +++ b/net/minecraft/world/entity/LivingEntity.java
-@@ -3789,7 +3789,13 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -3801,7 +3801,13 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
          if (this.level() instanceof ServerLevel serverLevel) {
              profiler.push("freezing");
              if ((!this.isInPowderSnow || !this.canFreeze()) && !this.freezeLocked) { // Paper - Freeze Tick Lock API
