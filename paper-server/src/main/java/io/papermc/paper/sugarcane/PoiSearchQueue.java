@@ -48,6 +48,8 @@ public final class PoiSearchQueue {
 
     /**
      * Returns the section key of the next queued section.
+     *
+     * @return the next section key, in breadth-first order
      */
     public long dequeue() {
         return this.queue[this.head++];
@@ -55,6 +57,10 @@ public final class PoiSearchQueue {
 
     /**
      * Queues the section unless it is outside the search box or has been queued before.
+     *
+     * @param sectionX the section's x coordinate
+     * @param sectionY the section's y coordinate
+     * @param sectionZ the section's z coordinate
      */
     public void enqueue(final int sectionX, final int sectionY, final int sectionZ) {
         final int x = sectionX - this.lowerX;
@@ -77,6 +83,10 @@ public final class PoiSearchQueue {
 
     /**
      * Queues the six face neighbours of a section, in the order {@code PoiAccess} has always visited them.
+     *
+     * @param sectionX the section's x coordinate
+     * @param sectionY the section's y coordinate
+     * @param sectionZ the section's z coordinate
      */
     public void enqueueNeighbours(final int sectionX, final int sectionY, final int sectionZ) {
         this.enqueue(sectionX, sectionY, sectionZ - 1);

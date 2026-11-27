@@ -17,6 +17,7 @@ import net.minecraft.world.entity.ai.behavior.BehaviorControl;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.schedule.Activity;
 import org.bukkit.support.environment.Normal;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -37,11 +38,11 @@ public class BrainBehaviourOrderTest {
         private final List<String> log;
         private final long seed;
         private final Brain<LivingEntity>[] brain;
-        private final Activity switchTo;
+        private final @Nullable Activity switchTo;
         private Behavior.Status status = Behavior.Status.STOPPED;
         private int remaining;
 
-        private Recorder(final String name, final List<String> log, final long seed, final Brain<LivingEntity>[] brain, final Activity switchTo) {
+        private Recorder(final String name, final List<String> log, final long seed, final Brain<LivingEntity>[] brain, final @Nullable Activity switchTo) {
             this.name = name;
             this.log = log;
             this.seed = seed;
@@ -115,7 +116,7 @@ public class BrainBehaviourOrderTest {
             for (int i = 0; i < count; ++i) {
                 final int priority = random.nextInt(12);
                 // a few behaviours switch the brain to another activity when they start
-                final Activity switchTo = random.nextInt(8) == 0 ? ACTIVITIES[1 + random.nextInt(ACTIVITIES.length - 1)] : null;
+                final @Nullable Activity switchTo = random.nextInt(8) == 0 ? ACTIVITIES[1 + random.nextInt(ACTIVITIES.length - 1)] : null;
                 behaviours.add(Pair.of(priority, new Recorder(activity.getName() + "#" + id, log, layoutSeed * 31 + id, holder, switchTo)));
                 ++id;
             }

@@ -44,6 +44,8 @@ public final class FoliaMode {
      * Reads the Folia mode flags out of paper-global.yml. Called from
      * {@link io.papermc.paper.plugin.PluginInitializerManager#load(OptionSet)} before any plugin provider
      * is built. Subsequent calls are ignored so the mode stays fixed for the server's lifetime.
+     *
+     * @param options the server's command line options, for the paper settings directory
      */
     public static void loadEarly(final OptionSet options) {
         if (loaded) {
@@ -72,6 +74,8 @@ public final class FoliaMode {
 
     /**
      * Whether plugins are required to declare {@code folia-supported: true}.
+     *
+     * @return {@code true} in forced Folia mode
      */
     public static boolean forceFolia() {
         return forceFolia;
@@ -80,6 +84,8 @@ public final class FoliaMode {
     /**
      * Whether the legacy {@link org.bukkit.scheduler.BukkitScheduler} should throw
      * {@link UnsupportedOperationException}, as it does on Folia.
+     *
+     * @return {@code true} in forced Folia mode with the strict scheduler on
      */
     public static boolean strictScheduler() {
         return forceFolia && strictScheduler;
@@ -89,6 +95,7 @@ public final class FoliaMode {
      * Rejects a plugin that has not opted in to Folia support. Mirrors Folia's own message so build
      * scripts and users see the same text they would on a real Folia server.
      *
+     * @param meta the plugin being loaded
      * @throws RuntimeException if forced Folia mode is on and the plugin does not declare support
      */
     public static void checkSupported(final PluginMeta meta) {

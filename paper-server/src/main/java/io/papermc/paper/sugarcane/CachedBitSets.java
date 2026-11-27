@@ -24,6 +24,9 @@ public final class CachedBitSets {
     /**
      * Returns a cleared {@link BitSet} with at least {@code bits} bits, reusing this thread's previous
      * instance for the same size where possible. The returned set must not outlive the current operation.
+     *
+     * @param bits the number of bits needed
+     * @return a cleared bit set, which may be shared with later calls on this thread
      */
     public static BitSet getCachedOrNew(final int bits) {
         final BitSet bitSet = CACHE.get().computeIfAbsent(bits, CONSTRUCTOR);
